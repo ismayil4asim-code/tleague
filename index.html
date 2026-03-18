@@ -564,20 +564,35 @@ window.addEventListener('load',function(){
 
   <div style="background:rgba(12,24,14,.95);border:1px solid rgba(123,232,86,.2);border-radius:24px;padding:24px 20px;max-width:340px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.5);">
     <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px;">Добро пожаловать!</div>
-    <div style="font-size:12px;color:#8abf90;margin-bottom:22px;line-height:1.6;">Войди через Telegram чтобы получить доступ к лиге, турнирам и матчам</div>
+    <div style="font-size:12px;color:#8abf90;margin-bottom:22px;line-height:1.6;">Войди через Telegram — нажми кнопку, открой бота и нажми <b style="color:#7be856;">Start</b></div>
 
-    <!-- Telegram Login Widget -->
-    <div id="tgLoginWrap" style="display:flex;justify-content:center;margin-bottom:16px;">
-      <script async src="https://telegram.org/js/telegram-widget.js?22"
-        data-telegram-login="tleaguebot"
-        data-size="large"
-        data-radius="12"
-        data-onauth="onTelegramAuth(user)"
-        data-request-access="write">
-      </script>
+    <!-- Шаг 1: кнопка -->
+    <div id="loginStep1">
+      <button onclick="startBotAuth()" style="width:100%;background:linear-gradient(135deg,#229ed9,#1a86ba);border:none;color:#fff;font-weight:800;font-size:15px;padding:14px 20px;border-radius:50px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 20px rgba(34,158,217,.4);margin-bottom:14px;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
+        Войти через Telegram
+      </button>
+      <div style="font-size:10px;color:rgba(255,255,255,.2);line-height:1.5;">Нажав кнопку, ты перейдёшь в бота<br>и подтвердишь вход одним нажатием</div>
     </div>
 
-    <div style="font-size:10px;color:rgba(255,255,255,.2);line-height:1.5;">Нажимая «Войти через Telegram», ты соглашаешься<br>с передачей публичных данных профиля</div>
+    <!-- Шаг 2: ожидание подтверждения -->
+    <div id="loginStep2" style="display:none;">
+      <div style="font-size:32px;margin-bottom:12px;animation:float 2s ease-in-out infinite;">⏳</div>
+      <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:8px;">Жду подтверждения...</div>
+      <div style="font-size:12px;color:#8abf90;margin-bottom:16px;line-height:1.6;">Открой <b style="color:#7be856;">@tleaguebot</b> в Telegram<br>и нажми кнопку <b style="color:#7be856;">Start</b></div>
+      <a id="loginBotLink" href="#" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#229ed9,#1a86ba);color:#fff;font-weight:700;font-size:13px;padding:10px 20px;border-radius:30px;text-decoration:none;margin-bottom:12px;">📱 Открыть бота</a>
+      <div style="height:4px;background:rgba(123,232,86,.1);border-radius:4px;overflow:hidden;margin:8px 0;">
+        <div id="loginPollBar" style="height:100%;background:linear-gradient(90deg,#7be856,#4caf50);width:0%;transition:width .3s;border-radius:4px;"></div>
+      </div>
+      <button onclick="cancelBotAuth()" style="background:none;border:none;color:rgba(255,255,255,.3);font-size:12px;cursor:pointer;margin-top:8px;">Отмена</button>
+    </div>
+
+    <!-- Шаг 3: успех -->
+    <div id="loginStep3" style="display:none;">
+      <div style="font-size:42px;margin-bottom:12px;">✅</div>
+      <div style="font-size:15px;font-weight:700;color:#7be856;">Вход выполнен!</div>
+      <div style="font-size:12px;color:#8abf90;margin-top:6px;">Загружаем приложение...</div>
+    </div>
   </div>
 </div>
 <script>
@@ -1872,25 +1887,102 @@ function spawnSplashPetals(){
   }
 }
 // ================================================================
-// TELEGRAM LOGIN WIDGET CALLBACK
+// BOT DEEP LINK AUTH
 // ================================================================
-async function onTelegramAuth(tgUser){
-  // Прячем экран логина, показываем сплэш
-  const ls=document.getElementById('loginScreen');
-  if(ls){ls.style.opacity='0';ls.style.transition='opacity .4s';setTimeout(()=>{ls.style.display='none';},400);}
+let _pollInterval = null;
+let _pollToken = null;
+let _pollSeconds = 0;
+const POLL_TIMEOUT = 180; // 3 минуты
 
-  const sp=document.getElementById('splash');
-  if(sp){sp.style.display='flex';sp.style.opacity='1';}
-  if(window._startPetals) setTimeout(window._startPetals,100);
+async function startBotAuth() {
+  try {
+    // Получаем токен от сервера
+    const res = await fetch('/api/auth-start');
+    const data = await res.json();
+    if (!data.token) throw new Error('no token');
 
-  // Сохраняем данные TG в localStorage для будущих сессий
-  localStorage.setItem('tl_tg_user', JSON.stringify({
-    id: tgUser.id,
-    username: tgUser.username||null,
-    first_name: tgUser.first_name||'Игрок',
-    photo_url: tgUser.photo_url||null
-  }));
+    _pollToken = data.token;
 
+    // Показываем шаг 2
+    document.getElementById('loginStep1').style.display = 'none';
+    document.getElementById('loginStep2').style.display = 'block';
+    document.getElementById('loginBotLink').href = data.botUrl;
+
+    // Открываем бота автоматически
+    window.open(data.botUrl, '_blank');
+
+    // Запускаем поллинг
+    _pollSeconds = 0;
+    _pollInterval = setInterval(pollAuthStatus, 2000);
+
+  } catch(e) {
+    toast('❌ Ошибка соединения, попробуй ещё раз');
+  }
+}
+
+async function pollAuthStatus() {
+  if (!_pollToken) return;
+  _pollSeconds += 2;
+
+  // Прогресс бар
+  const pct = Math.min(100, (_pollSeconds / POLL_TIMEOUT) * 100);
+  const bar = document.getElementById('loginPollBar');
+  if (bar) bar.style.width = pct + '%';
+
+  // Таймаут
+  if (_pollSeconds >= POLL_TIMEOUT) {
+    cancelBotAuth();
+    toast('⏰ Время истекло, попробуй ещё раз');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth-check?token=' + _pollToken);
+    const data = await res.json();
+
+    if (data.status === 'confirmed' && data.user) {
+      clearInterval(_pollInterval);
+      _pollInterval = null;
+
+      // Показываем успех
+      document.getElementById('loginStep2').style.display = 'none';
+      document.getElementById('loginStep3').style.display = 'block';
+
+      // Сохраняем сессию
+      localStorage.setItem('tl_tg_user', JSON.stringify(data.user));
+
+      // Запускаем приложение
+      setTimeout(() => {
+        const ls = document.getElementById('loginScreen');
+        if (ls) { ls.style.opacity = '0'; ls.style.transition = 'opacity .4s'; setTimeout(() => { ls.style.display = 'none'; }, 420); }
+        const sp = document.getElementById('splash');
+        if (sp) { sp.style.display = 'flex'; sp.style.opacity = '1'; }
+        if (window._startPetals) setTimeout(window._startPetals, 100);
+        launchApp(data.user);
+      }, 1200);
+    }
+  } catch(e) {
+    // Игнорируем сетевые ошибки при поллинге
+  }
+}
+
+function cancelBotAuth() {
+  if (_pollInterval) { clearInterval(_pollInterval); _pollInterval = null; }
+  _pollToken = null;
+  document.getElementById('loginStep2').style.display = 'none';
+  document.getElementById('loginStep1').style.display = 'block';
+  const bar = document.getElementById('loginPollBar');
+  if (bar) bar.style.width = '0%';
+}
+
+// Оставляем для совместимости с Mini App
+async function onTelegramAuth(tgUser) {
+  const ls = document.getElementById('loginScreen');
+  if (ls) { ls.style.opacity = '0'; ls.style.transition = 'opacity .4s'; setTimeout(() => { ls.style.display = 'none'; }, 400); }
+  const sp = document.getElementById('splash');
+  if (sp) { sp.style.display = 'flex'; sp.style.opacity = '1'; }
+  if (window._startPetals) setTimeout(window._startPetals, 100);
+  localStorage.setItem('tl_tg_user', JSON.stringify({ id: tgUser.id, username: tgUser.username || null, first_name: tgUser.first_name || 'Игрок', photo_url: tgUser.photo_url || null }));
   await launchApp(tgUser);
 }
 
