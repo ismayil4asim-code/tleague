@@ -579,7 +579,7 @@ window.addEventListener('load',function(){
     <div id="loginStep2" style="display:none;">
       <div style="font-size:32px;margin-bottom:12px;animation:float 2s ease-in-out infinite;">⏳</div>
       <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:8px;">Жду подтверждения...</div>
-      <div style="font-size:12px;color:#8abf90;margin-bottom:16px;line-height:1.6;">Открой <b style="color:#7be856;">@tleaguebot</b> в Telegram<br>и нажми кнопку <b style="color:#7be856;">Start</b></div>
+      <div style="font-size:12px;color:#8abf90;margin-bottom:16px;line-height:1.6;">Открой <b style="color:#7be856;">@tinforobot</b> в Telegram<br>и нажми кнопку <b style="color:#7be856;">Start</b></div>
       <a id="loginBotLink" href="#" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#229ed9,#1a86ba);color:#fff;font-weight:700;font-size:13px;padding:10px 20px;border-radius:30px;text-decoration:none;margin-bottom:12px;">📱 Открыть бота</a>
       <div style="height:4px;background:rgba(123,232,86,.1);border-radius:4px;overflow:hidden;margin:8px 0;">
         <div id="loginPollBar" style="height:100%;background:linear-gradient(90deg,#7be856,#4caf50);width:0%;transition:width .3s;border-radius:4px;"></div>
@@ -1908,7 +1908,7 @@ async function startBotAuth() {
     });
     if (error) throw new Error(error.message);
 
-    const botUrl = `https://t.me/tleaguebot?start=${token}`;
+    const botUrl = `https://t.me/tinforobot?start=${token}`;
 
     // Показываем шаг 2
     document.getElementById('loginStep1').style.display = 'none';
