@@ -1887,7 +1887,7 @@ function spawnSplashPetals(){
   }
 }
 // ================================================================
-// BOT DEEP LINK AUTH
+// BOT DEEP LINK AUTH (через Supabase — без серверных файлов)
 // ================================================================
 let _pollInterval = null;
 let _pollToken = null;
@@ -1896,27 +1896,35 @@ const POLL_TIMEOUT = 180; // 3 минуты
 
 async function startBotAuth() {
   try {
-    // Получаем токен от сервера
-    const res = await fetch('/api/auth-start');
-    const data = await res.json();
-    if (!data.token) throw new Error('no token');
+    // Генерируем токен прямо на клиенте
+    const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    _pollToken = token;
 
-    _pollToken = data.token;
+    // Сохраняем токен в Supabase
+    const {error} = await db.from('auth_tokens').insert({
+      token: token,
+      status: 'pending',
+      created_at: new Date().toISOString()
+    });
+    if (error) throw new Error(error.message);
+
+    const botUrl = `https://t.me/tleaguebot?start=${token}`;
 
     // Показываем шаг 2
     document.getElementById('loginStep1').style.display = 'none';
     document.getElementById('loginStep2').style.display = 'block';
-    document.getElementById('loginBotLink').href = data.botUrl;
+    document.getElementById('loginBotLink').href = botUrl;
 
-    // Открываем бота автоматически
-    window.open(data.botUrl, '_blank');
+    // Открываем бота
+    window.open(botUrl, '_blank');
 
     // Запускаем поллинг
     _pollSeconds = 0;
     _pollInterval = setInterval(pollAuthStatus, 2000);
 
   } catch(e) {
-    toast('❌ Ошибка соединения, попробуй ещё раз');
+    console.error('startBotAuth error:', e);
+    toast('❌ Ошибка: ' + (e.message || 'попробуй ещё раз'));
   }
 }
 
@@ -1932,33 +1940,45 @@ async function pollAuthStatus() {
   // Таймаут
   if (_pollSeconds >= POLL_TIMEOUT) {
     cancelBotAuth();
+    // Чистим истёкший токен
+    db.from('auth_tokens').delete().eq('token', _pollToken).then(()=>{});
     toast('⏰ Время истекло, попробуй ещё раз');
     return;
   }
 
   try {
-    const res = await fetch('/api/auth-check?token=' + _pollToken);
-    const data = await res.json();
+    const {data} = await db.from('auth_tokens')
+      .select('*').eq('token', _pollToken).single();
 
-    if (data.status === 'confirmed' && data.user) {
+    if (data && data.status === 'confirmed' && data.telegram_id) {
       clearInterval(_pollInterval);
       _pollInterval = null;
+
+      // Удаляем токен
+      db.from('auth_tokens').delete().eq('token', _pollToken).then(()=>{});
+
+      const tgUser = {
+        id: data.telegram_id,
+        username: data.username || null,
+        first_name: data.first_name || 'Игрок',
+        photo_url: null
+      };
 
       // Показываем успех
       document.getElementById('loginStep2').style.display = 'none';
       document.getElementById('loginStep3').style.display = 'block';
 
       // Сохраняем сессию
-      localStorage.setItem('tl_tg_user', JSON.stringify(data.user));
+      localStorage.setItem('tl_tg_user', JSON.stringify(tgUser));
 
       // Запускаем приложение
       setTimeout(() => {
         const ls = document.getElementById('loginScreen');
-        if (ls) { ls.style.opacity = '0'; ls.style.transition = 'opacity .4s'; setTimeout(() => { ls.style.display = 'none'; }, 420); }
+        if (ls) { ls.style.opacity='0'; ls.style.transition='opacity .4s'; setTimeout(()=>{ls.style.display='none';},420); }
         const sp = document.getElementById('splash');
-        if (sp) { sp.style.display = 'flex'; sp.style.opacity = '1'; }
+        if (sp) { sp.style.display='flex'; sp.style.opacity='1'; }
         if (window._startPetals) setTimeout(window._startPetals, 100);
-        launchApp(data.user);
+        launchApp(tgUser);
       }, 1200);
     }
   } catch(e) {
@@ -1968,9 +1988,12 @@ async function pollAuthStatus() {
 
 function cancelBotAuth() {
   if (_pollInterval) { clearInterval(_pollInterval); _pollInterval = null; }
+  if (_pollToken) { db.from('auth_tokens').delete().eq('token', _pollToken).then(()=>{}); }
   _pollToken = null;
-  document.getElementById('loginStep2').style.display = 'none';
-  document.getElementById('loginStep1').style.display = 'block';
+  const s2 = document.getElementById('loginStep2');
+  const s1 = document.getElementById('loginStep1');
+  if (s2) s2.style.display = 'none';
+  if (s1) s1.style.display = 'block';
   const bar = document.getElementById('loginPollBar');
   if (bar) bar.style.width = '0%';
 }
