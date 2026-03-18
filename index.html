@@ -549,8 +549,37 @@ window.addEventListener('load',function(){
   <div class="splash-spring">🌿 Весна 2026 🌸</div>
   <div class="splash-sub">Virtual Football League</div>
   <div class="splash-bar"><div class="splash-bar-fill"></div></div>
-  <!-- Лепестки ПОСЛЕ текстов — в DOM последние = визуально поверх всего -->
   <div id="splashPetals" style="position:absolute;inset:0;z-index:10;pointer-events:none;"></div>
+</div>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" style="display:none;position:fixed;inset:0;z-index:99990;background:linear-gradient(170deg,#0b1a0d 0%,#0f2212 35%,#0d1f10 65%,#091408 100%);flex-direction:column;align-items:center;justify-content:center;padding:24px;">
+  <div style="position:absolute;top:-8px;right:40px;font-size:70px;opacity:.06;transform:rotate(12deg);">🌿</div>
+  <div style="position:absolute;bottom:40px;left:20px;font-size:50px;opacity:.05;">🌸</div>
+
+  <img src="https://i.imgur.com/KMett7q.jpeg" style="width:90px;height:90px;border-radius:50%;border:3px solid #7be856;object-fit:cover;margin-bottom:18px;box-shadow:0 0 0 6px rgba(123,232,86,.1),0 0 36px rgba(123,232,86,.4);" onerror="this.style.display='none'">
+
+  <div style="font-size:38px;font-weight:900;background:linear-gradient(135deg,#fff 0%,#c8f7a0 30%,#7be856 60%,#fff 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px;">T-League</div>
+  <div style="font-size:12px;color:rgba(168,224,99,.6);letter-spacing:2px;text-transform:uppercase;margin-bottom:32px;">Virtual Football League</div>
+
+  <div style="background:rgba(12,24,14,.95);border:1px solid rgba(123,232,86,.2);border-radius:24px;padding:24px 20px;max-width:340px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.5);">
+    <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px;">Добро пожаловать!</div>
+    <div style="font-size:12px;color:#8abf90;margin-bottom:22px;line-height:1.6;">Войди через Telegram чтобы получить доступ к лиге, турнирам и матчам</div>
+
+    <!-- Telegram Login Widget -->
+    <!-- ⚠️ ВАЖНО: замени YOUR_BOT_USERNAME на username своего бота -->
+    <div id="tgLoginWrap" style="display:flex;justify-content:center;margin-bottom:16px;">
+      <script async src="https://telegram.org/js/telegram-widget.js?22"
+        data-telegram-login="tleaguebot"
+        data-size="large"
+        data-radius="12"
+        data-onauth="onTelegramAuth(user)"
+        data-request-access="write">
+      </script>
+    </div>
+
+    <div style="font-size:10px;color:rgba(255,255,255,.2);line-height:1.5;">Нажимая «Войти через Telegram», ты соглашаешься<br>с передачей публичных данных профиля</div>
+  </div>
 </div>
 <script>
 (function(){
@@ -822,6 +851,9 @@ window.addEventListener('load',function(){
   <!-- PROFILE -->
   <div id="page-profile" class="page">
     <div class="card" id="myProfileContent"><div class="loader">Загрузка...</div></div>
+    <div class="card" style="margin-top:0;">
+      <button onclick="logoutUser()" style="width:100%;background:rgba(255,80,80,.07);border:1px solid rgba(255,80,80,.25);color:#ff7070;font-weight:700;font-size:14px;padding:12px 16px;border-radius:40px;cursor:pointer;transition:.2s;">🚪 Выйти из аккаунта</button>
+    </div>
   </div>
 
   <!-- EDIT PROFILE -->
@@ -1840,37 +1872,79 @@ function spawnSplashPetals(){
     container.appendChild(p);
   }
 }
+// ================================================================
+// TELEGRAM LOGIN WIDGET CALLBACK
+// ================================================================
+async function onTelegramAuth(tgUser){
+  // Прячем экран логина, показываем сплэш
+  const ls=document.getElementById('loginScreen');
+  if(ls){ls.style.opacity='0';ls.style.transition='opacity .4s';setTimeout(()=>{ls.style.display='none';},400);}
+
+  const sp=document.getElementById('splash');
+  if(sp){sp.style.display='flex';sp.style.opacity='1';}
+  if(window._startPetals) setTimeout(window._startPetals,100);
+
+  // Сохраняем данные TG в localStorage для будущих сессий
+  localStorage.setItem('tl_tg_user', JSON.stringify({
+    id: tgUser.id,
+    username: tgUser.username||null,
+    first_name: tgUser.first_name||'Игрок',
+    photo_url: tgUser.photo_url||null
+  }));
+
+  await launchApp(tgUser);
+}
+
 async function initUser(){
   // Тема мгновенно из localStorage
   const savedTheme=localStorage.getItem('tl_theme');
   if(savedTheme==='blue') document.body.classList.add('theme-blue');
 
+  // Telegram Mini App (открыто внутри Telegram)
+  const tgMiniUser=window.Telegram?.WebApp?.initDataUnsafe?.user;
+  if(tgMiniUser && tgMiniUser.id){
+    // Запускаем сразу как Mini App — без экрана логина
+    await launchApp(tgMiniUser);
+    return;
+  }
 
+  // Веб: проверяем сохранённую сессию
+  const savedTgUser = (() => {
+    try { return JSON.parse(localStorage.getItem('tl_tg_user')||'null'); }
+    catch(e){ return null; }
+  })();
+
+  if(savedTgUser && savedTgUser.id){
+    // Есть сохранённая сессия — сразу грузим
+    await launchApp(savedTgUser);
+    return;
+  }
+
+  // Нет авторизации — показываем экран входа
+  const sp=document.getElementById('splash');
+  if(sp){sp.style.transition='opacity .4s';sp.style.opacity='0';setTimeout(()=>{sp.style.display='none';},420);}
+  window._splashActive=false;
+
+  const ls=document.getElementById('loginScreen');
+  if(ls){ls.style.display='flex';}
+}
+
+async function launchApp(tgUser){
   // --- ШАГ 1: Параллельно — грузим пользователя И проверяем maint ---
-  const tgUser=tg?.initDataUnsafe?.user;
   const userPromise=(async()=>{
     try{
-      if(!tgUser){
-        const r=await Promise.race([
-          db.from('users').select('*').eq('username','ismayil066').single(),
-          new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),4000))
-        ]);
-        return r.data||{id:1,telegram_id:7252997554,username:'ismayil066',first_name:'Ismayil',role:'owner',xp:0};
-      }else{
-        const r=await Promise.race([
-          db.from('users').select('*').eq('telegram_id',tgUser.id).single(),
-          new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),4000))
-        ]);
-        if(r.data) return r.data;
-        const fallback={telegram_id:tgUser.id,username:tgUser.username||null,first_name:tgUser.first_name||'Игрок',role:'player',xp:0};
-        db.from('users').upsert({telegram_id:tgUser.id,username:tgUser.username||null,first_name:tgUser.first_name||'Игрок'},{onConflict:'telegram_id'})
-          .then(async()=>{const r2=await db.from('users').select('*').eq('telegram_id',tgUser.id).single();if(r2.data)CU=r2.data;}).catch(()=>{});
-        return fallback;
-      }
+      const r=await Promise.race([
+        db.from('users').select('*').eq('telegram_id',tgUser.id).single(),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),4000))
+      ]);
+      if(r.data) return r.data;
+      // Новый пользователь — создаём запись
+      const fallback={telegram_id:tgUser.id,username:tgUser.username||null,first_name:tgUser.first_name||'Игрок',role:'player',xp:0};
+      db.from('users').upsert({telegram_id:tgUser.id,username:tgUser.username||null,first_name:tgUser.first_name||'Игрок'},{onConflict:'telegram_id'})
+        .then(async()=>{const r2=await db.from('users').select('*').eq('telegram_id',tgUser.id).single();if(r2.data)CU=r2.data;}).catch(()=>{});
+      return fallback;
     }catch(e){
-      return tgUser
-        ?{telegram_id:tgUser.id,username:tgUser.username||null,first_name:tgUser.first_name||'Игрок',role:'player',xp:0}
-        :{id:1,telegram_id:7252997554,username:'ismayil066',first_name:'Ismayil',role:'owner',xp:0};
+      return {telegram_id:tgUser.id,username:tgUser.username||null,first_name:tgUser.first_name||'Игрок',role:'player',xp:0};
     }
   })();
 
@@ -1884,7 +1958,6 @@ async function initUser(){
     }catch(e){return false;}
   })();
 
-  // Ждём минимум 1.2с (хватит на анимацию лого) и оба запроса
   const [userData,isMaint]=await Promise.all([
     userPromise,
     maintPromise,
@@ -1892,26 +1965,23 @@ async function initUser(){
   ]);
   CU=userData;
 
-  // --- ШАГ 2: Если ТЕХ.ОБСЛУЖИВАНИЕ и пользователь не админ ---
+  // --- ШАГ 2: Тех.обслуживание ---
   if(isMaint&&!canAdmin()){
     maintEnabled=true;
-    // Коротко показываем сплэш ещё 0.8с, потом переключаемся на maint
     await new Promise(r=>setTimeout(r,800));
     const sp=document.getElementById('splash');
     if(sp){sp.style.transition='opacity .5s';sp.style.opacity='0';setTimeout(()=>{sp.style.display='none';},550);}
-  window._splashActive=false; // останавливаем лепестки
+    window._splashActive=false;
     document.getElementById('maintScreen').classList.add('show');
     return;
   }
 
-  // --- ШАГ 3: Обычный запуск — досиживаем оставшееся время сплэша ---
+  // --- ШАГ 3: Запуск ---
   const _splashMs=4500+Math.random()*2500;
-  
-  // Уже прошло ~1.2с, ждём остаток
   await new Promise(r=>setTimeout(r,Math.max(0,_splashMs-1200)));
   const sp=document.getElementById('splash');
   if(sp){sp.style.transition='opacity .5s';sp.style.opacity='0';setTimeout(()=>{sp.style.display='none';},550);}
-  window._splashActive=false; // останавливаем лепестки
+  window._splashActive=false;
   document.getElementById('appWrap').style.display='block';
 
   // Блокировка
@@ -1927,12 +1997,10 @@ async function initUser(){
     }catch(e){}
   }
 
-  // Загружаем главную
   try{loadMyMatches();}catch(e){}
   try{loadMyInvites();}catch(e){}
   try{loadNotifBadge();}catch(e){}
 
-  // Фон: тема из БД
   setTimeout(async()=>{
     try{
       const tr=await db.from('app_settings').select('value').eq('key','theme').single();
@@ -1945,6 +2013,16 @@ async function initUser(){
     }catch(e){}
     setTimeout(()=>{try{checkExpiredDeadlines();}catch(e){}},3000);
   },3000);
+}
+
+// Выход из аккаунта (кнопка в профиле)
+function logoutUser(){
+  localStorage.removeItem('tl_tg_user');
+  CU=null;
+  document.getElementById('appWrap').style.display='none';
+  const ls=document.getElementById('loginScreen');
+  if(ls){ls.style.display='flex';ls.style.opacity='1';}
+  toast('👋 Вы вышли из аккаунта');
 }
 
 // ================================================================
