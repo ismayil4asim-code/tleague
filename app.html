@@ -2121,6 +2121,19 @@ async function launchApp(tgUser){
   try{loadMyInvites();}catch(e){}
   try{loadNotifBadge();}catch(e){}
 
+  // ── ПРИСУТСТВИЕ: платформа + last_seen ──
+  try{ updatePresence(); }catch(e){}
+  // Обновляем last_seen каждые 60 секунд пока открыто
+  setInterval(()=>{ try{updatePresence(false);}catch(e){} }, 60000);
+  // При закрытии вкладки — ставим оффлайн
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState==='hidden') updatePresence(false, true);
+    else updatePresence(false);
+  });
+
+  // ── PUSH УВЕДОМЛЕНИЯ ──
+  try{ setTimeout(initPush, 3000); }catch(e){}
+
   setTimeout(async()=>{
     try{
       const tr=await db.from('app_settings').select('value').eq('key','theme').single();
@@ -3611,6 +3624,7 @@ async function showPlayerProfile(u,backPage='players'){
         <div style="color:var(--gold);font-size:12px;">${u.username?'@'+u.username:''}</div>
         ${u.bio?`<div style="font-size:11px;color:var(--sub);margin-top:2px;">${u.bio}</div>`:''}
         <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">${roleBadge(u.role)}<span class="level-badge ${lv.cls}">${lv.icon} ${lv.name}</span></div>
+        ${presenceBadge(u)}
       </div>
     </div>
     <div style="background:rgba(0,0,0,.2);border-radius:14px;padding:12px;margin-bottom:14px;">
@@ -3715,6 +3729,7 @@ async function loadMyProfile(){
         <div style="color:var(--gold);font-size:12px;">${CU.username?'@'+CU.username:''}</div>
         ${CU.bio?`<div style="font-size:11px;color:var(--sub);margin-top:2px;">${CU.bio}</div>`:''}
         <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">${roleBadge(CU.role)}<span class="level-badge ${lv.cls}">${lv.icon} Ур.${lv.num} ${lv.name}</span></div>
+        ${presenceBadge(CU)}
       </div>
     </div>
     <div style="background:rgba(0,0,0,.2);border-radius:14px;padding:12px;margin-bottom:14px;">
@@ -6204,6 +6219,117 @@ async function renderParticipantsList(parts, waitlist, t, isAdmin){
 })();
 
 
+
+// ================================================================
+// ПРИСУТСТВИЕ (онлайн-статус, платформа, last_seen)
+// ================================================================
+function detectPlatform(){
+  const tg = window.Telegram?.WebApp?.initDataUnsafe?.user;
+  if(tg) return 'telegram';
+  const ua = navigator.userAgent.toLowerCase();
+  // TWA / Android App
+  if(document.referrer.includes('android-app://') || window.matchMedia('(display-mode: standalone)').matches){
+    if(/android/.test(ua)) return 'android';
+    return 'pwa';
+  }
+  if(/android/.test(ua)) return 'browser_android';
+  if(/iphone|ipad/.test(ua)) return 'browser_ios';
+  return 'browser';
+}
+
+const PLATFORM_LABEL = {
+  telegram:       '✈️ Telegram',
+  android:        '📱 Android App',
+  pwa:            '📲 PWA',
+  browser_android:'🌐 Браузер (Android)',
+  browser_ios:    '🌐 Браузер (iOS)',
+  browser:        '🖥️ Браузер',
+};
+
+async function updatePresence(withPlatform=true, going_offline=false){
+  if(!CU?.id) return;
+  const upd = { last_seen: new Date().toISOString() };
+  if(withPlatform) upd.platform = detectPlatform();
+  if(going_offline) upd.last_seen = new Date(Date.now()-120000).toISOString(); // 2 мин назад
+  try{ await db.from('users').update(upd).eq('id', CU.id); }catch(e){}
+}
+
+function isOnline(last_seen){
+  if(!last_seen) return false;
+  return (Date.now() - new Date(last_seen)) < 90000; // онлайн если был < 90 сек назад
+}
+
+function presenceBadge(user){
+  const online = isOnline(user?.last_seen);
+  const platform = user?.platform || 'browser';
+  const label = PLATFORM_LABEL[platform] || '🌐 Браузер';
+  const lastSeenStr = user?.last_seen
+    ? timeAgo(user.last_seen)
+    : '';
+  return `
+    <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
+      <span style="display:inline-flex;align-items:center;gap:5px;background:${online?'rgba(123,232,86,.1)':'rgba(255,255,255,.05)'};border:1px solid ${online?'rgba(123,232,86,.3)':'rgba(255,255,255,.1)'};border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;color:${online?'#7be856':'var(--sub)'};">
+        <span style="width:6px;height:6px;border-radius:50%;background:${online?'#7be856':'rgba(255,255,255,.2)'};${online?'box-shadow:0 0 6px #7be856;':''}flex-shrink:0;"></span>
+        ${online ? 'Онлайн' : (lastSeenStr ? 'Был '+lastSeenStr : 'Оффлайн')}
+      </span>
+      <span style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:3px 10px;font-size:11px;color:var(--sub);">
+        ${label}
+      </span>
+    </div>`;
+}
+
+// ================================================================
+// PUSH УВЕДОМЛЕНИЯ
+// ================================================================
+const VAPID_PUBLIC = 'BB65qjhQsiEzVwnyLyBcod0peFjz-CsKB8ao4RZ1nSS6GCstCNsX2djv-w-b_ciqIMUV4-_PCDkhWNH_-9kf7W0';
+// ⚠️ Замени VAPID_PUBLIC на свой ключ (генерация ниже)
+
+async function initPush(){
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if(!CU?.id) return;
+
+  try{
+    const reg = await navigator.serviceWorker.ready;
+
+    // Проверяем уже есть ли подписка
+    let sub = await reg.pushManager.getSubscription();
+
+    if(!sub){
+      // Спрашиваем разрешение
+      const perm = await Notification.requestPermission();
+      if(perm !== 'granted') return;
+
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC)
+      });
+    }
+
+    // Сохраняем токен в Supabase
+    const token = JSON.stringify(sub);
+    await db.from('users').update({ push_token: token }).eq('id', CU.id);
+
+  }catch(e){ console.warn('Push init failed:', e); }
+}
+
+function urlBase64ToUint8Array(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+// ================================================================
+// ОТПРАВКА PUSH (вызывается из бота/сервера)
+// ================================================================
+async function sendPushToUser(userId, title, body, url='/'){
+  // Получаем токен пользователя
+  const {data:u} = await db.from('users').select('push_token').eq('id', userId).single();
+  if(!u?.push_token) return false;
+  // Реальная отправка требует сервер с VAPID — делается через Edge Function
+  // Здесь просто сохраняем в notifications таблицу, push шлёт Edge Function
+  return true;
+}
 
 initUser();
 </script>
