@@ -331,6 +331,19 @@ header{
   text-align:center;
   padding:0 24px 120px;
 }
+.social-btn{
+  display:inline-flex;align-items:center;gap:10px;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:14px;padding:12px 16px;
+  text-decoration:none;color:#fff;
+  transition:.2s;
+}
+.social-btn:hover{
+  background:rgba(var(--sc,255,255,255),.12);
+  border-color:rgba(var(--sc,255,255,255),.3);
+  transform:translateY(-2px);
+}
 .final-cta-title{
   font-family:'Bebas Neue',sans-serif;
   font-size:clamp(36px,7vw,72px);
@@ -392,7 +405,7 @@ footer a{color:var(--green);text-decoration:none;opacity:.7;}
     <img class="logo-img" src="https://i.imgur.com/KMett7q.jpeg" onerror="this.style.display='none'">
     <span class="logo-text">T-League</span>
   </div>
-  <a href="./app.html" class="header-cta">👤 Личный кабинет</a>
+  <a href="./index.html" class="header-cta">👤 Личный кабинет</a>
 </header>
 
 <!-- HERO -->
@@ -401,10 +414,10 @@ footer a{color:var(--green);text-decoration:none;opacity:.7;}
 
   <h1 class="hero-title">
     <span class="t">T-League</span>
-    <span class="league">eFootball mobile</span>
+    <span class="league">Football</span>
   </h1>
 
-  <p class="hero-sub">Virtual Football League · eFootball mobile</p>
+  <p class="hero-sub">Virtual Football League · eFootball</p>
 
   <div class="ball-wrap">
     <div class="ball"></div>
@@ -413,7 +426,7 @@ footer a{color:var(--green);text-decoration:none;opacity:.7;}
 
   <br><br>
 
-  <a href="./app.html" class="hero-btn">
+  <a href="./index.html" class="hero-btn">
     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
     Личный кабинет
   </a>
@@ -442,17 +455,17 @@ footer a{color:var(--green);text-decoration:none;opacity:.7;}
 
 <!-- FEATURES -->
 <section class="features reveal">
-  <div class="features-title">Всё что нужно<br><span>для игры</span></div>
+  <div class="features-title">Всё что нужно<br><span>для лиги</span></div>
   <div class="features-grid">
     <div class="feat-card">
       <span class="feat-icon">🏆</span>
       <div class="feat-name">Турниры</div>
-      <div class="feat-desc">КН, КООП, ТРАНСФЕРЫ, ЕВРОПА, все есть для вашего удобства.</div>
+      <div class="feat-desc">КН, КООП, ЕВРО, СБОРНЫЕ, КОМАНДЫ.</div>
     </div>
     <div class="feat-card">
       <span class="feat-icon">📊</span>
-      <div class="feat-name">Конкуренция</div>
-      <div class="feat-desc">У нас играют не ради денег, а ради прокачки опыта</div>
+      <div class="feat-name">Турнирная таблица</div>
+      <div class="feat-desc">Автоматический пересчёт очков, голов и разницы мячей в реальном времени.</div>
     </div>
     <div class="feat-card">
       <span class="feat-icon">⚽</span>
@@ -490,10 +503,80 @@ footer a{color:var(--green);text-decoration:none;opacity:.7;}
 <div class="final-cta reveal">
   <div class="final-cta-title">Готов сыграть?</div>
   <div class="final-cta-sub">Войди в личный кабинет и присоединяйся к лиге</div>
-  <a href="./app.html" class="hero-btn">
+  <a href="./index.html" class="hero-btn" style="margin-bottom:40px;">
     <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
     Личный кабинет
   </a>
+
+  <!-- СКАЧАТЬ ПРИЛОЖЕНИЕ -->
+  <div style="max-width:420px;margin:0 auto 60px;width:100%;">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:2px;margin-bottom:6px;">Скачать приложение</div>
+    <div style="font-size:13px;color:var(--sub);margin-bottom:20px;">Играй где удобно — на телефоне или планшете</div>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+      <a href="В разработке" target="_blank"
+        style="display:inline-flex;align-items:center;gap:10px;background:rgba(123,232,86,.08);border:1px solid rgba(123,232,86,.25);border-radius:16px;padding:14px 24px;text-decoration:none;transition:.2s;min-width:160px;"
+        onmouseover="this.style.background='rgba(123,232,86,.15)'" onmouseout="this.style.background='rgba(123,232,86,.08)'"
+        onclick="handleDownload(event,'android')">
+        <span style="font-size:28px;">🤖</span>
+        <div style="text-align:left;">
+          <div style="font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:1px;">Скачать для</div>
+          <div style="font-size:15px;font-weight:800;color:#fff;">Android</div>
+        </div>
+      </a>
+      <a href="#"
+        style="display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:14px 24px;text-decoration:none;transition:.2s;min-width:160px;opacity:.6;"
+        onclick="handleDownload(event,'ios')">
+        <span style="font-size:28px;">🍎</span>
+        <div style="text-align:left;">
+          <div style="font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:1px;">Скачать для</div>
+          <div style="font-size:15px;font-weight:800;color:#fff;">iOS</div>
+        </div>
+      </a>
+    </div>
+    <div id="downloadMsg" style="margin-top:12px;font-size:12px;color:#ffab40;display:none;">⚠️ В разработке — скоро появится!</div>
+  </div>
+
+  <!-- СОЦСЕТИ -->
+  <div style="max-width:420px;margin:0 auto 60px;width:100%;">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:2px;margin-bottom:6px;">Соц. сети</div>
+    <div style="font-size:13px;color:var(--sub);margin-bottom:20px;">Следи за новостями лиги</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <a href="https://t.me/efootballtleague" target="_blank" class="social-btn" style="--sc:#229ed9;">
+        <span style="font-size:22px;">✈️</span>
+        <div><div style="font-size:12px;font-weight:800;">Telegram</div><div style="font-size:10px;opacity:.6;">@efootballtleague</div></div>
+      </a>
+      <a href="https://www.twitch.tv/efootballtleague" target="_blank" class="social-btn" style="--sc:#9146ff;">
+        <span style="font-size:22px;">🎮</span>
+        <div><div style="font-size:12px;font-weight:800;">Twitch</div><div style="font-size:10px;opacity:.6;">efootballtleague</div></div>
+      </a>
+      <a href="https://www.youtube.com/@efootballtleague" target="_blank" class="social-btn" style="--sc:#ff0000;">
+        <span style="font-size:22px;">▶️</span>
+        <div><div style="font-size:12px;font-weight:800;">YouTube</div><div style="font-size:10px;opacity:.6;">efootballtleague</div></div>
+      </a>
+      <a href="https://www.instagram.com/efootballtleague" target="_blank" class="social-btn" style="--sc:#e1306c;">
+        <span style="font-size:22px;">📸</span>
+        <div><div style="font-size:12px;font-weight:800;">Instagram</div><div style="font-size:10px;opacity:.6;">efootballtleague</div></div>
+      </a>
+    </div>
+  </div>
+
+  <!-- ПОДДЕРЖКА -->
+  <div style="max-width:420px;margin:0 auto;width:100%;">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:2px;margin-bottom:6px;">Служба поддержки</div>
+    <div style="font-size:13px;color:var(--sub);margin-bottom:20px;">Есть вопросы? Мы поможем</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+      <a href="https://t.me/tleaguerobot" target="_blank"
+        style="display:inline-flex;align-items:center;gap:8px;background:rgba(34,158,217,.1);border:1px solid rgba(34,158,217,.3);border-radius:50px;padding:12px 20px;text-decoration:none;color:#54a9d4;font-weight:700;font-size:13px;transition:.2s;"
+        onmouseover="this.style.background='rgba(34,158,217,.2)'" onmouseout="this.style.background='rgba(34,158,217,.1)'">
+        ✈️ Telegram бот поддержки
+      </a>
+      <a href="https://www.instagram.com/ismayil066" target="_blank"
+        style="display:inline-flex;align-items:center;gap:8px;background:rgba(225,48,108,.08);border:1px solid rgba(225,48,108,.25);border-radius:50px;padding:12px 20px;text-decoration:none;color:#e1306c;font-weight:700;font-size:13px;transition:.2s;"
+        onmouseover="this.style.background='rgba(225,48,108,.15)'" onmouseout="this.style.background='rgba(225,48,108,.08)'">
+        📸 Instagram @ismayil066
+      </a>
+    </div>
+  </div>
 </div>
 
 <!-- FOOTER -->
@@ -502,6 +585,17 @@ footer a{color:var(--green);text-decoration:none;opacity:.7;}
 </footer>
 
 <script>
+// ── СКАЧИВАНИЕ ──
+function handleDownload(e, platform){
+  if(platform === 'ios'){
+    e.preventDefault();
+    const msg = document.getElementById('downloadMsg');
+    msg.style.display = 'block';
+    setTimeout(()=>{ msg.style.display='none'; }, 3000);
+  }
+  // android — переходит по ссылке (можно заменить на реальный APK)
+}
+
 // ── ЛЕПЕСТКИ ──
 (function(){
   const emojis = ['🌸','🌺','🌼','🌷','🍃','🌿','🍀','✿'];
