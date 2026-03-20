@@ -34,7 +34,7 @@
 }
 *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
 html{background:#0b1a0d!important;}
-body{background:#0b1a0d!important;min-height:100vh;color:var(--text);display:flex;justify-content:center;padding:8px 8px 80px;}
+body{background:#0b1a0d!important;min-height:100vh;color:var(--text);display:flex;justify-content:center;padding:8px 8px 80px;padding-bottom:max(80px,env(safe-area-inset-bottom,80px));overflow-x:hidden;}
 /* Постоянный фон-панель — под всем контентом на всех вкладках */
 #app-bg{position:fixed;inset:0;z-index:1;pointer-events:none;
   background:linear-gradient(170deg,#0b1a0d 0%,#0f2212 35%,#0d1f10 65%,#091408 100%);
@@ -6237,15 +6237,18 @@ async function renderParticipantsList(parts, waitlist, t, isAdmin){
 function detectPlatform(){
   // Явно выставлен при Mini App входе
   if(window._forcePlatform) return window._forcePlatform;
-  // Проверяем Telegram SDK
+  // Telegram Mini App
   if(window.Telegram?.WebApp?.initDataUnsafe?.user) return 'telegram';
   const ua = navigator.userAgent.toLowerCase();
-  // TWA / Android App (standalone)
-  if(window.matchMedia('(display-mode: standalone)').matches){
-    if(/android/.test(ua)) return 'android';
-    return 'pwa';
+  // Capacitor (нативное приложение)
+  if(window.Capacitor || ua.includes('capacitor')){
+    return /android/.test(ua) ? 'android_app' : 'ios_app';
   }
-  if(document.referrer.includes('android-app://')) return 'android';
+  // TWA / standalone PWA
+  if(document.referrer.includes('android-app://')) return 'android_app';
+  if(window.matchMedia('(display-mode: standalone)').matches){
+    return /android/.test(ua) ? 'android_app' : 'pwa';
+  }
   if(/android/.test(ua)) return 'browser_android';
   if(/iphone|ipad/.test(ua)) return 'browser_ios';
   return 'browser';
@@ -6253,7 +6256,8 @@ function detectPlatform(){
 
 const PLATFORM_LABEL = {
   telegram:       '✈️ Telegram',
-  android:        '📱 Android App',
+  android_app:    '📱 Приложение (Android)',
+  ios_app:        '📱 Приложение (iOS)',
   pwa:            '📲 PWA',
   browser_android:'🌐 Браузер (Android)',
   browser_ios:    '🌐 Браузер (iOS)',
@@ -6262,7 +6266,8 @@ const PLATFORM_LABEL = {
 
 const PLATFORM_COLOR = {
   telegram:       'rgba(34,158,217,.15)',
-  android:        'rgba(76,175,80,.1)',
+  android_app:    'rgba(76,175,80,.12)',
+  ios_app:        'rgba(76,175,80,.12)',
   pwa:            'rgba(123,232,86,.1)',
   browser_android:'rgba(255,255,255,.05)',
   browser_ios:    'rgba(255,255,255,.05)',
@@ -6271,7 +6276,8 @@ const PLATFORM_COLOR = {
 
 const PLATFORM_BORDER = {
   telegram:       'rgba(34,158,217,.35)',
-  android:        'rgba(76,175,80,.3)',
+  android_app:    'rgba(76,175,80,.35)',
+  ios_app:        'rgba(76,175,80,.35)',
   pwa:            'rgba(123,232,86,.3)',
   browser_android:'rgba(255,255,255,.1)',
   browser_ios:    'rgba(255,255,255,.1)',
