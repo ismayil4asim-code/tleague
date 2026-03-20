@@ -2020,10 +2020,21 @@ async function initUser(){
   const savedTheme=localStorage.getItem('tl_theme');
   if(savedTheme==='blue') document.body.classList.add('theme-blue');
 
+  // Ждём загрузку Telegram SDK (до 800мс)
+  await new Promise(res=>{
+    if(window.Telegram?.WebApp?.initDataUnsafe?.user) return res();
+    let tries=0;
+    const iv=setInterval(()=>{
+      tries++;
+      if(window.Telegram?.WebApp?.initDataUnsafe?.user || tries>8){ clearInterval(iv); res(); }
+    },100);
+  });
+
   // Telegram Mini App (открыто внутри Telegram)
   const tgMiniUser=window.Telegram?.WebApp?.initDataUnsafe?.user;
   if(tgMiniUser && tgMiniUser.id){
-    // Запускаем сразу как Mini App — без экрана логина
+    // Помечаем как telegram и запускаем без экрана логина
+    window._forcePlatform = 'telegram';
     await launchApp(tgMiniUser);
     return;
   }
@@ -2035,7 +2046,6 @@ async function initUser(){
   })();
 
   if(savedTgUser && savedTgUser.id){
-    // Есть сохранённая сессия — сразу грузим
     await launchApp(savedTgUser);
     return;
   }
@@ -6224,14 +6234,17 @@ async function renderParticipantsList(parts, waitlist, t, isAdmin){
 // ПРИСУТСТВИЕ (онлайн-статус, платформа, last_seen)
 // ================================================================
 function detectPlatform(){
-  const tg = window.Telegram?.WebApp?.initDataUnsafe?.user;
-  if(tg) return 'telegram';
+  // Явно выставлен при Mini App входе
+  if(window._forcePlatform) return window._forcePlatform;
+  // Проверяем Telegram SDK
+  if(window.Telegram?.WebApp?.initDataUnsafe?.user) return 'telegram';
   const ua = navigator.userAgent.toLowerCase();
-  // TWA / Android App
-  if(document.referrer.includes('android-app://') || window.matchMedia('(display-mode: standalone)').matches){
+  // TWA / Android App (standalone)
+  if(window.matchMedia('(display-mode: standalone)').matches){
     if(/android/.test(ua)) return 'android';
     return 'pwa';
   }
+  if(document.referrer.includes('android-app://')) return 'android';
   if(/android/.test(ua)) return 'browser_android';
   if(/iphone|ipad/.test(ua)) return 'browser_ios';
   return 'browser';
@@ -6240,6 +6253,29 @@ function detectPlatform(){
 const PLATFORM_LABEL = {
   telegram:       '✈️ Telegram',
   android:        '📱 Android App',
+  pwa:            '📲 PWA',
+  browser_android:'🌐 Браузер (Android)',
+  browser_ios:    '🌐 Браузер (iOS)',
+  browser:        '🖥️ Браузер (ПК)',
+};
+
+const PLATFORM_COLOR = {
+  telegram:       'rgba(34,158,217,.15)',
+  android:        'rgba(76,175,80,.1)',
+  pwa:            'rgba(123,232,86,.1)',
+  browser_android:'rgba(255,255,255,.05)',
+  browser_ios:    'rgba(255,255,255,.05)',
+  browser:        'rgba(255,255,255,.05)',
+};
+
+const PLATFORM_BORDER = {
+  telegram:       'rgba(34,158,217,.35)',
+  android:        'rgba(76,175,80,.3)',
+  pwa:            'rgba(123,232,86,.3)',
+  browser_android:'rgba(255,255,255,.1)',
+  browser_ios:    'rgba(255,255,255,.1)',
+  browser:        'rgba(255,255,255,.1)',
+};
   pwa:            '📲 PWA',
   browser_android:'🌐 Браузер (Android)',
   browser_ios:    '🌐 Браузер (iOS)',
@@ -6263,16 +6299,29 @@ function presenceBadge(user){
   const online = isOnline(user?.last_seen);
   const platform = user?.platform || 'browser';
   const label = PLATFORM_LABEL[platform] || '🌐 Браузер';
-  const lastSeenStr = user?.last_seen
-    ? timeAgo(user.last_seen)
-    : '';
+  const bgColor = PLATFORM_COLOR[platform] || 'rgba(255,255,255,.05)';
+  const bdColor = PLATFORM_BORDER[platform] || 'rgba(255,255,255,.1)';
+  const isTelegram = platform === 'telegram';
+  const lastSeenStr = user?.last_seen ? timeAgo(user.last_seen) : '';
+
   return `
-    <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
-      <span style="display:inline-flex;align-items:center;gap:5px;background:${online?'rgba(123,232,86,.1)':'rgba(255,255,255,.05)'};border:1px solid ${online?'rgba(123,232,86,.3)':'rgba(255,255,255,.1)'};border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;color:${online?'#7be856':'var(--sub)'};">
-        <span style="width:6px;height:6px;border-radius:50%;background:${online?'#7be856':'rgba(255,255,255,.2)'};${online?'box-shadow:0 0 6px #7be856;':''}flex-shrink:0;"></span>
-        ${online ? 'Онлайн' : (lastSeenStr ? 'Был '+lastSeenStr : 'Оффлайн')}
+    <div style="display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap;">
+      <span style="display:inline-flex;align-items:center;gap:5px;
+        background:${online?'rgba(123,232,86,.1)':'rgba(255,255,255,.05)'};
+        border:1px solid ${online?'rgba(123,232,86,.3)':'rgba(255,255,255,.1)'};
+        border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;
+        color:${online?'#7be856':'var(--sub)'};">
+        <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;
+          background:${online?'#7be856':'rgba(255,255,255,.2)'};
+          ${online?'box-shadow:0 0 6px rgba(123,232,86,.8);animation:blink 1.5s ease-in-out infinite;':''}">
+        </span>
+        ${online ? 'Онлайн' : (lastSeenStr ? 'Был ' + lastSeenStr : 'Оффлайн')}
       </span>
-      <span style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:3px 10px;font-size:11px;color:var(--sub);">
+      <span style="display:inline-flex;align-items:center;gap:5px;
+        background:${bgColor};
+        border:1px solid ${bdColor};
+        border-radius:20px;padding:3px 10px;font-size:11px;font-weight:${isTelegram?'700':'500'};
+        color:${isTelegram?'#54a9d4':'var(--sub)'};">
         ${label}
       </span>
     </div>`;
@@ -6281,7 +6330,7 @@ function presenceBadge(user){
 // ================================================================
 // PUSH УВЕДОМЛЕНИЯ
 // ================================================================
-const VAPID_PUBLIC = 'BB65qjhQsiEzVwnyLyBcod0peFjz-CsKB8ao4RZ1nSS6GCstCNsX2djv-w-b_ciqIMUV4-_PCDkhWNH_-9kf7W0';
+const VAPID_PUBLIC = 'BEl62iUYgUivxIkv69yViEuiBIa40HkfvmT9T7dl5p9GKGfJlPCFp4lT6l3QUH5TxS7xkJRjAFm5n7L8X7qLqg0';
 // ⚠️ Замени VAPID_PUBLIC на свой ключ (генерация ниже)
 
 async function initPush(){
