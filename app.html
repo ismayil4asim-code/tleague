@@ -118,11 +118,20 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .nav-btn{flex:1;text-align:center;padding:9px 0;border-radius:36px;color:var(--sub);font-weight:600;cursor:pointer;font-size:12px;transition:.25s;position:relative;}
 .nav-btn.active{background:linear-gradient(135deg,#7be856,#4caf50);color:#000;font-weight:800;box-shadow:0 2px 14px rgba(123,232,86,.4);}
 .notif-dot{display:inline-block;width:7px;height:7px;background:#ff4444;border-radius:50%;position:absolute;top:4px;right:6px;}
-/* Фикс для мобильного приложения — навигация снизу */
-@media (max-width:520px){
-  .nav{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:460px;top:auto;margin-bottom:0;z-index:200;}
-  .app{padding-bottom:80px;}
-  body{padding-top:8px;}
+@media (max-width:600px){
+  .nav{
+    position:fixed;
+    bottom:16px;
+    bottom:calc(16px + env(safe-area-inset-bottom, 0px));
+    left:12px;right:12px;
+    top:auto;
+    margin-bottom:0;
+    z-index:200;
+    border-radius:40px;
+  }
+  .app{padding-bottom:90px;}
+  body{padding-top:8px;padding-bottom:100px!important;}
+  .ptr-indicator{margin-top:0;}
 }
 
 /* PAGES */
@@ -597,7 +606,7 @@ window.addEventListener('load',function(){
     <div id="loginStep2" style="display:none;">
       <div style="font-size:32px;margin-bottom:12px;animation:float 2s ease-in-out infinite;">⏳</div>
       <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:8px;">Жду подтверждения...</div>
-      <div style="font-size:12px;color:#8abf90;margin-bottom:16px;line-height:1.6;">Открой <b style="color:#7be856;">@tinforobot</b> в Telegram<br>и нажми кнопку <b style="color:#7be856;">Start</b></div>
+      <div style="font-size:12px;color:#8abf90;margin-bottom:16px;line-height:1.6;">Открой <b style="color:#7be856;">@Tleaguebot</b> в Telegram<br>и нажми кнопку <b style="color:#7be856;">Start</b></div>
       <a id="loginBotLink" href="#" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#229ed9,#1a86ba);color:#fff;font-weight:700;font-size:13px;padding:10px 20px;border-radius:30px;text-decoration:none;margin-bottom:12px;">📱 Открыть бота</a>
       <div style="height:4px;background:rgba(123,232,86,.1);border-radius:4px;overflow:hidden;margin:8px 0;">
         <div id="loginPollBar" style="height:100%;background:linear-gradient(90deg,#7be856,#4caf50);width:0%;transition:width .3s;border-radius:4px;"></div>
@@ -758,11 +767,11 @@ window.addEventListener('load',function(){
 
 <div class="app" id="appWrap" style="display:none;">
   <div class="nav">
-    <div class="nav-btn active" onclick="navigate('main')">🏠</div>
-    <div class="nav-btn" onclick="navigate('tournaments')">🏆</div>
-    <div class="nav-btn" onclick="navigate('players')">👥</div>
-    <div class="nav-btn" onclick="navigate('notifications')">🔔<span class="notif-dot" id="notifDot" style="display:none;"></span></div>
-    <div class="nav-btn" onclick="navigate('profile')">👤</div>
+    <div class="nav-btn active" onclick="navigate('main')">🏠<div style="font-size:9px;margin-top:2px;">Главная</div></div>
+    <div class="nav-btn" onclick="navigate('tournaments')">🏆<div style="font-size:9px;margin-top:2px;">Турниры</div></div>
+    <div class="nav-btn" onclick="navigate('players')">👥<div style="font-size:9px;margin-top:2px;">Игроки</div></div>
+    <div class="nav-btn" onclick="navigate('notifications')">🔔<span class="notif-dot" id="notifDot" style="display:none;"></span><div style="font-size:9px;margin-top:2px;">Уведомл.</div></div>
+    <div class="nav-btn" onclick="navigate('profile')">👤<div style="font-size:9px;margin-top:2px;">Профиль</div></div>
   </div>
   <div class="ptr-indicator" id="ptrIndicator">↓ Потяни для обновления</div>
 
@@ -1926,7 +1935,7 @@ async function startBotAuth() {
     });
     if (error) throw new Error(error.message);
 
-    const botUrl = `https://t.me/tinforobot?start=${token}`;
+    const botUrl = `https://t.me/Tleaguebot?start=${token}`;
 
     // Показываем шаг 2
     document.getElementById('loginStep1').style.display = 'none';
@@ -2535,7 +2544,12 @@ async function submitScore(matchId){
         if(opp){
           const {data:hp}=await db.from('tournament_participants').select('team_name').eq('id',m.home_participant_id).single();
           const {data:ap}=await db.from('tournament_participants').select('team_name').eq('id',m.away_participant_id).single();
-          await db.from('notifications').insert({user_id:opp.id,type:'match_submitted',title:'⚽ Соперник ввёл счёт',body:`${hp?.team_name||'?'} ${home}:${away} ${ap?.team_name||'?'} — Матч #${matchId}`,match_id:matchId});
+          const scoreText=`${hp?.team_name||'?'} ${home}:${away} ${ap?.team_name||'?'}`;
+          await db.from('notifications').insert({user_id:opp.id,type:'match_submitted',title:'⚽ Соперник ввёл счёт',body:`${scoreText} — Матч #${matchId}. Подтверди или оспорь.`,match_id:matchId});
+          // Telegram уведомление сопернику
+          sendBotNotify(oppPart.user_id,
+            `⚽ <b>Соперник ввёл счёт!</b>\n\n${scoreText}\n\n👉 Зайди в приложение и подтверди или оспорь результат — Матч #${matchId}`
+          ).catch(()=>{});
         }
       }
     }
@@ -2576,6 +2590,20 @@ async function confirmMatch(matchId){
       const myXp=imH?result.hXp:result.aXp;
       msg+=` +${myXp} XP ⭐`;
     }
+
+    // Уведомляем обоих игроков в Telegram
+    try{
+      const {data:mFull}=await db.from('matches').select('*,home:tournament_participants!home_participant_id(team_name,user_id),away:tournament_participants!away_participant_id(team_name,user_id)').eq('id',matchId).single();
+      if(mFull){
+        const homeTeam=mFull.home?.team_name||'?';
+        const awayTeam=mFull.away?.team_name||'?';
+        const scoreStr=`${homeTeam} <b>${mFull.home_score}:${mFull.away_score}</b> ${awayTeam}`;
+        const tgText=`✅ <b>Матч подтверждён!</b>\n\n${scoreStr}\n\n⭐ XP начислены`;
+        if(mFull.home?.user_id) sendBotNotify(mFull.home.user_id, tgText).catch(()=>{});
+        if(mFull.away?.user_id) sendBotNotify(mFull.away.user_id, tgText).catch(()=>{});
+      }
+    }catch(e){}
+
     toast(msg,3500);navigate('main');
   // Продвигаем победителей в плей-офф если матч плей-офф
   if(result){
@@ -5017,6 +5045,30 @@ async function adminCreateTournament(){
   // Получаем созданный турнир отдельным запросом
   const {data:created}=await db.from('tournaments').select('id,name').eq('name',name).order('id',{ascending:false}).limit(1).single();
   toast('✅ Турнир «'+name+'» создан!');
+
+  // Уведомляем всех игроков о новом турнире
+  try{
+    const {data:allUsers}=await db.from('users').select('id,telegram_id').neq('role','').limit(200);
+    if(allUsers?.length){
+      const typeLabel={league:'🏅 Лига',cup:'🏆 Кубок',group_playoff:'⚽ Группа+Плей-офф'}[type]||'🏆 Турнир';
+      const notifRows=allUsers.map(u=>({
+        user_id:u.id,
+        type:'general',
+        title:`🎉 Новый турнир открыт!`,
+        body:`${typeLabel} «${name}» — регистрация открыта!${desc?' '+desc:''}`
+      }));
+      // Вставляем уведомления порциями по 50
+      for(let i=0;i<notifRows.length;i+=50){
+        await db.from('notifications').insert(notifRows.slice(i,i+50));
+      }
+      // Telegram уведомление всем у кого есть telegram_id
+      const tgMsg=`🎉 <b>Новый турнир!</b>\n\n${typeLabel} <b>${name}</b>\n${desc||''}\n\n👉 Зайди в приложение чтобы зарегистрироваться!`;
+      for(const u of allUsers){
+        if(u.telegram_id) sendBotNotify(u.telegram_id, tgMsg).catch(()=>{});
+      }
+    }
+  }catch(e){console.warn('notif error',e);}
+
   document.getElementById('newTName').value='';
   document.getElementById('newTBannerUrl').value='';
   loadAdminTList();
@@ -5115,6 +5167,14 @@ async function sendMassNotif(){
   for(let i=0;i<notifs.length;i+=50){
     await db.from('notifications').insert(notifs.slice(i,i+50));
   }
+  // Telegram push всем получателям
+  try{
+    const {data:tgUsers}=await db.from('users').select('telegram_id').in('id',userIds).not('telegram_id','is',null);
+    const tgMsg=`📢 <b>${title}</b>${body?'\n\n'+body:''}`;
+    for(const u of (tgUsers||[])){
+      if(u.telegram_id) sendBotNotify(u.telegram_id, tgMsg).catch(()=>{});
+    }
+  }catch(e){}
   toast('✅ Отправлено '+userIds.length+' получателям');
   document.getElementById('massNotifTitle').value='';
   document.getElementById('massNotifBody').value='';
