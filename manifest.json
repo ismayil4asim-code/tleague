@@ -1,8 +1,10 @@
 {
+  "id": "com.tleague.app",
   "name": "T-League",
   "short_name": "T-League",
   "description": "Virtual Football League — турниры, матчи, таблица",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0b1a0d",
@@ -10,18 +12,23 @@
   "lang": "ru",
   "icons": [
     {
-      "src": "https://i.imgur.com/KMett7q.jpeg",
+      "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/jpeg",
-      "purpose": "any maskable"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "https://i.imgur.com/KMett7q.jpeg",
+      "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/jpeg",
-      "purpose": "any maskable"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
-  "categories": ["sports", "games"],
-  "screenshots": []
+  "categories": ["sports", "games"]
 }
