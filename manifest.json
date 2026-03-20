@@ -1,0 +1,27 @@
+{
+  "name": "T-League",
+  "short_name": "T-League",
+  "description": "Virtual Football League — турниры, матчи, таблица",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1a0d",
+  "theme_color": "#0b1a0d",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "https://i.imgur.com/KMett7q.jpeg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://i.imgur.com/KMett7q.jpeg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["sports", "games"],
+  "screenshots": []
+}
