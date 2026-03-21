@@ -1088,7 +1088,6 @@ window.addEventListener('load',function(){
             <option value="league">🏅 Лига</option>
             <option value="group_playoff">⚽ Группа + Плей-офф</option>
             <option value="cup">🏆 Кубок</option>
-            <option value="special_squad">🌟 Особенный Состав</option>
           </select>
         </div>
         <div class="form-group"><label class="form-label">Макс. участников</label><input class="form-input" id="newTMax" type="number" placeholder="32"></div>
@@ -1113,6 +1112,7 @@ window.addEventListener('load',function(){
             <option value="free">Свободный (игрок вводит название)</option>
             <option value="authentic">Аутентичный (команды назначает админ)</option>
             <option value="transfers">Трансферы (аутентичный + трансфермаркт)</option>
+            <option value="special_squad">🌟 Особенный Состав (игрок загружает фото)</option>
           </select>
           <div class="form-hint">Аутентичный/Трансферы: игрок регистрируется без команды, затем админ назначает</div>
         </div>
@@ -1495,6 +1495,7 @@ window.addEventListener('load',function(){
           <option value="free">Свободный</option>
           <option value="authentic">Аутентичный</option>
           <option value="transfers">Трансферы</option>
+          <option value="special_squad">🌟 Особенный Состав</option>
         </select>
       </div>
       <div id="etSquadTypeFields" style="display:none;">
@@ -1769,7 +1770,7 @@ window.addEventListener('unhandledrejection',e=>{
 let CU=null,allPlayers=[],tFilter='all',curTId=null,pTabMode='level',editedBannerChoice=1;
 
 const ROLE_L={owner:{n:'👑 Владелец',c:'r-owner'},admin:{n:'🔥 Адм.',c:'r-admin'},senior_mod:{n:'⚡ Ст.Мод.',c:'r-senior_mod'},mod:{n:'🛡️ Мод.',c:'r-mod'},project_editor:{n:'📁 Ред. проекта',c:'r-peditor'},player:{n:'🌱 Игрок',c:'r-player'}};
-const TYPE_L={league:'Лига',group_playoff:'Группа+ПО',cup:'Кубок',special_squad:'🌟 Особый Состав'};
+const TYPE_L={league:'Лига',group_playoff:'Группа+ПО',cup:'Кубок'};
 const ST_L={registration:'Регистрация',active:'Активный',finished:'Завершён',cancelled:'Отменён'};
 
 // ================================================================
@@ -3052,8 +3053,8 @@ async function openTournament(tId){
       <div><div style="font-size:13px;font-weight:700;color:#4caf50;">Ты зарегистрирован</div><div style="font-size:12px;color:var(--sub);margin-top:1px;">${teamDisplay}</div></div>
     </div>`;
 
-    // Блок подачи состава для особого турнира
-    if(t.type==='special_squad'){
+    // Блок подачи состава для особого формата
+    if(t.squad_mode==='special_squad'){
       const {data:mySquad}=await db.from('tournament_squads').select('*').eq('tournament_id',tId).eq('participant_id',myPart.id).single().catch(()=>({data:null}));
       html+=renderSquadSubmitBlock(t,myPart,mySquad);
     }
@@ -3123,8 +3124,11 @@ async function openTournament(tId){
     } else {
       if(t.type==='league')html+=await renderLeague(t,activeParts);
       else if(t.type==='group_playoff')html+=await renderGroupPlayoff(t);
-      else if(t.type==='special_squad')html+=await renderSpecialSquad(t,activeParts,myPart);
       else html+=await renderCup(t.id);
+    }
+    // Для особого состава добавляем таблицу составов поверх
+    if(t.squad_mode==='special_squad'){
+      html+=await renderSpecialSquad(t,activeParts,myPart);
     }
   }catch(renderErr){
     console.error('Tournament render error:',renderErr);
@@ -5522,7 +5526,7 @@ async function adminCreateTournament(){
   if(bannerUrl){const h=document.getElementById('newTBannerHint');if(h&&h.className.includes('err')){toast('❌ Исправь баннер');return;}}
   const squadMode=document.getElementById('newTSquadMode')?.value||'free';
   const teamType=document.getElementById('newTTeamType')?.value||'clubs';
-  const squadDeadline=type==='special_squad'?(document.getElementById('newTSquadDeadline')?.value||null):null;
+  const squadDeadline=squadMode==='special_squad'?(document.getElementById('newTSquadDeadline')?.value||null):null;
   // Редактор проекта — принудительно его проект
   if(CU?.role==='project_editor'&&CU.managed_project_id){
     const sel=document.getElementById('newTProject');
@@ -5927,7 +5931,12 @@ function toggleSquadFields(prefix){
   const mode=document.getElementById(prefix==='new'?'newTSquadMode':'etSquadMode')?.value||'free';
   const fieldsId=prefix==='new'?'newTSquadTypeFields':'etSquadTypeFields';
   const el=document.getElementById(fieldsId);
-  if(el) el.style.display=mode!=='free'?'block':'none';
+  // Показываем поля команд только для authentic/transfers
+  if(el) el.style.display=(mode==='authentic'||mode==='transfers')?'block':'none';
+  // Показываем дедлайн для особого состава
+  const deadlineFieldId=prefix==='new'?'tf-special_squad':'et-special-squad-field';
+  const dlEl=document.getElementById(deadlineFieldId);
+  if(dlEl) dlEl.style.display=mode==='special_squad'?'block':'none';
 }
 
 function getTeamList(teamType){
