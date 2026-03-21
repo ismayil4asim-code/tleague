@@ -2449,20 +2449,32 @@ function renderMatchCard(m,myIds=[],pNameMap={},tNameMap={}){
 }
 
 async function openMatchAction(matchId){
-  const {data:m}=await db.from('matches').select('*').eq('id',matchId).single();if(!m)return;
-  const tgId=Number(CU.telegram_id||CU.id);
-  // Ищем участников по telegram_id
-  const {data:parts}=await db.from('tournament_participants').select('id').eq('user_id',tgId);
-  // Также ищем по internal id на случай если user_id хранится иначе
-  const {data:parts2}=await db.from('tournament_participants').select('id').eq('user_id',CU.id||tgId);
-  const allParts=[...(parts||[]),...(parts2||[])];
-  const ids=[...new Set(allParts.map(p=>String(p.id)))];
-  const amP=ids.includes(String(m.home_participant_id))||ids.includes(String(m.away_participant_id));
-  if(m.status==='confirmed'||m.status==='disputed')openMatchDetail(matchId);
-  else if(m.status==='pending'&&amP)openSubmitScore(matchId);
-  else if(m.status==='pending'&&!amP)openMatchDetail(matchId);
-  else if(m.status==='awaiting_confirmation'){if(String(m.submitted_by)===String(CU?.id)){toast('⏳ Ждёшь подтверждения соперника');return;}openConfirmMatch(matchId);}
-  else openMatchDetail(matchId);
+  const {data:m}=await db.from('matches').select('*').eq('id',matchId).single();
+  if(!m) return;
+  // Сразу открываем нужную страницу без лишних запросов
+  if(m.status==='confirmed'||m.status==='disputed'){
+    openMatchDetail(matchId); return;
+  }
+  if(m.status==='awaiting_confirmation'){
+    if(String(m.submitted_by)===String(CU?.id)){
+      toast('⏳ Ждёшь подтверждения соперника'); return;
+    }
+    openConfirmMatch(matchId); return;
+  }
+  if(m.status==='pending'){
+    // Проверяем участие по telegram_id
+    const tgId=Number(CU?.telegram_id||CU?.id);
+    const {data:myParts}=await db.from('tournament_participants')
+      .select('id').eq('user_id',tgId)
+      .in('id',[m.home_participant_id,m.away_participant_id]);
+    if(myParts&&myParts.length>0){
+      openSubmitScore(matchId);
+    } else {
+      openMatchDetail(matchId);
+    }
+    return;
+  }
+  openMatchDetail(matchId);
 }
 
 // ================================================================
@@ -2538,33 +2550,11 @@ async function openSubmitScore(matchId){
   const {data:m}=await db.from('matches').select('*').eq('id',matchId).single();if(!m)return;
   const {data:hp}=await db.from('tournament_participants').select('team_name,user_id').eq('id',m.home_participant_id).single();
   const {data:ap}=await db.from('tournament_participants').select('team_name,user_id').eq('id',m.away_participant_id).single();
-  const homeName=hp?.team_name||'Хозяева';const awayName=ap?.team_name||'Гости';
+  const homeName=hp?.team_name||'Хозяева';
+  const awayName=ap?.team_name||'Гости';
   const dl=m.deadline?`<div class="deadline-badge" style="display:inline-block;margin-bottom:12px;">⏰ Дедлайн: ${new Date(m.deadline).toLocaleString('ru')}</div>`:'';
 
-  // Определяем соперника
-  const myTgId=Number(CU?.telegram_id||CU?.id);
-  const isHome=Number(hp?.user_id)===myTgId;
-  const oppPart=isHome?ap:hp;
-  const oppUsername=oppPart?.user_id?await (async()=>{
-    const {data:ou}=await db.from('users').select('username').eq('telegram_id',oppPart.user_id).single().catch(()=>({data:null}));
-    return ou?.username||null;
-  })():null;
-
-  // Состав соперника (если турнир с особым составом)
-  const {data:t}=await db.from('tournaments').select('squad_mode').eq('id',m.tournament_id).single().catch(()=>({data:null}));
-  let oppSquadBtn='';
-  if(t?.squad_mode==='special_squad' && oppPart){
-    const oppPartFull=isHome?ap:hp;
-    const partId=isHome?m.away_participant_id:m.home_participant_id;
-    const {data:sqArr}=await db.from('tournament_squads').select('photo_url').eq('participant_id',partId).limit(1).catch(()=>({data:null}));
-    const sq=sqArr&&sqArr.length?sqArr[0]:null;
-    if(sq?.photo_url){
-      oppSquadBtn=`<button onclick="openImageFull('${sq.photo_url}')" style="width:100%;margin-top:8px;padding:12px;background:rgba(255,171,64,.1);border:1px solid rgba(255,171,64,.25);border-radius:30px;color:#ffab40;font-size:14px;font-weight:700;cursor:pointer;">🌟 Посмотреть состав соперника</button>`;
-    }
-  }
-
-  const msgBtn=oppUsername?`<a href="https://t.me/${oppUsername}" target="_blank" style="display:block;width:100%;margin-top:8px;padding:12px;background:rgba(34,158,217,.1);border:1px solid rgba(34,158,217,.25);border-radius:30px;color:#54a9d4;font-size:14px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;">✈️ Написать сопернику</a>`:'';
-
+  // Рендерим основной контент сразу
   document.getElementById('submitScoreContent').innerHTML=`
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
       <span class="match-id-badge">#${m.id}</span>
@@ -2585,9 +2575,38 @@ async function openSubmitScore(matchId){
     <div style="font-size:12px;color:var(--sub);text-align:center;margin:0 0 18px;line-height:1.5;">После отправки соперник подтвердит результат</div>
     <button class="btn" onclick="submitScore(${matchId})" style="font-size:16px;padding:15px;">📤 Отправить</button>
     <button onclick="notifyOpponent(${matchId},event)" style="width:100%;margin-top:10px;padding:13px;background:rgba(123,232,86,.1);border:1px solid rgba(123,232,86,.25);border-radius:30px;color:#7be856;font-size:14px;font-weight:700;cursor:pointer;">📲 Уведомить соперника</button>
-    ${oppSquadBtn}
-    ${msgBtn}`;
+    <div id="extraMatchBtns"></div>`;
   navigate('submit-score');
+
+  // Дополнительные кнопки грузим асинхронно без блокировки
+  try{
+    const myTgId=Number(CU?.telegram_id||CU?.id);
+    const isHome=Number(hp?.user_id)===myTgId;
+    const oppPart=isHome?ap:hp;
+    const extra=document.getElementById('extraMatchBtns');
+    if(!extra||!oppPart) return;
+
+    // Кнопка написать сопернику
+    if(oppPart.user_id){
+      const {data:ouArr}=await db.from('users').select('username').eq('telegram_id',oppPart.user_id).limit(1);
+      const oppUsername=ouArr&&ouArr[0]?.username;
+      if(oppUsername){
+        extra.innerHTML+=`<a href="https://t.me/${oppUsername}" target="_blank" style="display:block;width:100%;margin-top:8px;padding:12px;background:rgba(34,158,217,.1);border:1px solid rgba(34,158,217,.25);border-radius:30px;color:#54a9d4;font-size:14px;font-weight:700;text-align:center;text-decoration:none;">✈️ Написать сопернику</a>`;
+      }
+    }
+
+    // Кнопка состава соперника (только для special_squad)
+    const {data:tArr}=await db.from('tournaments').select('squad_mode').eq('id',m.tournament_id).limit(1);
+    const squadMode=tArr&&tArr[0]?.squad_mode;
+    if(squadMode==='special_squad'){
+      const oppPartId=isHome?m.away_participant_id:m.home_participant_id;
+      const {data:sqArr}=await db.from('tournament_squads').select('photo_url').eq('participant_id',oppPartId).limit(1);
+      const sq=sqArr&&sqArr[0];
+      if(sq?.photo_url){
+        extra.innerHTML+=`<button onclick="openImageFull('${sq.photo_url}')" style="width:100%;margin-top:8px;padding:12px;background:rgba(255,171,64,.1);border:1px solid rgba(255,171,64,.25);border-radius:30px;color:#ffab40;font-size:14px;font-weight:700;cursor:pointer;">🌟 Состав соперника</button>`;
+      }
+    }
+  }catch(e){ console.warn('extra btns failed',e); }
 }
 async function submitScore(matchId){
   const home=parseInt(document.getElementById('homeScore').value),away=parseInt(document.getElementById('awayScore').value);
