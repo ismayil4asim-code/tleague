@@ -3416,10 +3416,10 @@ async function renderSpecialSquad(t, allParts, myPart){
   const tgId = Number(CU?.telegram_id||CU?.id);
   const isActive = t.status === 'active';
 
-  // Загружаем все составы турнира
+  // Загружаем все составы турнира — используем String ключи
   const {data:squads} = await db.from('tournament_squads').select('*').eq('tournament_id',t.id);
   const squadMap = {};
-  (squads||[]).forEach(s => squadMap[s.participant_id] = s);
+  (squads||[]).forEach(s => squadMap[String(s.participant_id)] = s);
 
   // Загружаем данные игроков
   const tgIds = allParts.map(p=>p.user_id).filter(Boolean);
@@ -3433,7 +3433,7 @@ async function renderSpecialSquad(t, allParts, myPart){
 
   // ── МОЙ СОСТАВ ──
   if(myPart){
-    const mySquad = squadMap[myPart.id];
+    const mySquad = squadMap[String(myPart.id)];
     const dl = t.squad_deadline ? new Date(t.squad_deadline) : null;
     const expired = dl && Date.now() > dl;
     const st = mySquad ? SQUAD_STATUS_LABEL[mySquad.status]||SQUAD_STATUS_LABEL.pending : SQUAD_STATUS_LABEL.none;
@@ -3449,23 +3449,25 @@ async function renderSpecialSquad(t, allParts, myPart){
       html += `<img src="${mySquad.photo_url}" style="width:100%;border-radius:12px;object-fit:cover;margin-bottom:10px;cursor:pointer;max-height:250px;" onclick="openImageFull('${mySquad.photo_url}')">`;
     }
     // Форма загрузки — только если не одобрен и не отказано
-    if(!isActive && (!mySquad || mySquad.status==='revision') && !expired){
-      html += `<div style="margin-top:4px;">
-        ${dl?`<div style="font-size:11px;color:var(--sub);margin-bottom:8px;">⏰ Дедлайн: ${dl.toLocaleString('ru',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>`:''}
-        <div class="upload-area" id="squadUploadArea" style="margin-bottom:8px;">
-          <input type="file" accept="image/jpeg,image/png,image/webp" onchange="handleSquadUpload(this,${t.id},${myPart.id})">
-          <div class="upload-inner"><div class="upload-icon">📸</div>
-            <div><div style="font-size:13px;font-weight:700;">Загрузи фото состава</div>
-            <div style="font-size:11px;color:var(--sub);">JPG/PNG · скриншот из игры</div></div></div>
-          <div class="upload-progress" id="squadUploadProgress" style="display:none;"><div class="upload-progress-fill" id="squadUploadFill"></div></div>
-        </div>
-        <div id="squadPreviewWrap" style="display:none;margin-bottom:8px;">
-          <img id="squadPreviewImg" style="width:100%;border-radius:12px;object-fit:cover;max-height:220px;">
-        </div>
-        <button class="btn" id="squadSubmitBtn" onclick="submitSquad(${t.id},${myPart.id})" style="display:none;">📤 Отправить состав</button>
-      </div>`;
-    } else if(!isActive && expired && !mySquad){
-      html += `<div style="font-size:12px;color:#ff9800;">⏰ Дедлайн истёк — подача закрыта</div>`;
+    if(!mySquad || mySquad.status==='revision'){
+      if(!expired){
+        html += `<div style="margin-top:4px;">
+          ${dl?`<div style="font-size:11px;color:var(--sub);margin-bottom:8px;">⏰ Дедлайн: ${dl.toLocaleString('ru',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>`:''}
+          <div class="upload-area" id="squadUploadArea" style="margin-bottom:8px;">
+            <input type="file" accept="image/jpeg,image/png,image/webp" onchange="handleSquadUpload(this,${t.id},${myPart.id})">
+            <div class="upload-inner"><div class="upload-icon">📸</div>
+              <div><div style="font-size:13px;font-weight:700;">Загрузи фото состава</div>
+              <div style="font-size:11px;color:var(--sub);">JPG/PNG · скриншот из игры</div></div></div>
+            <div class="upload-progress" id="squadUploadProgress" style="display:none;"><div class="upload-progress-fill" id="squadUploadFill"></div></div>
+          </div>
+          <div id="squadPreviewWrap" style="display:none;margin-bottom:8px;">
+            <img id="squadPreviewImg" style="width:100%;border-radius:12px;object-fit:cover;max-height:220px;">
+          </div>
+          <button class="btn" id="squadSubmitBtn" onclick="submitSquad(${t.id},${myPart.id})" style="display:none;">📤 Отправить состав</button>
+        </div>`;
+      } else {
+        html += `<div style="font-size:12px;color:#ff9800;">⏰ Дедлайн истёк — подача закрыта</div>`;
+      }
     }
     html += `</div>`;
   }
@@ -3475,7 +3477,7 @@ async function renderSpecialSquad(t, allParts, myPart){
 
   for(const p of allParts){
     const u = userMap[String(p.user_id)];
-    const sq = squadMap[p.id];
+    const sq = squadMap[String(p.id)];
     const st = sq ? (SQUAD_STATUS_LABEL[sq.status]||SQUAD_STATUS_LABEL.pending) : SQUAD_STATUS_LABEL.none;
     const isMe = Number(p.user_id) === tgId;
 
@@ -3494,8 +3496,8 @@ async function renderSpecialSquad(t, allParts, myPart){
 
   // Кнопка старта — только во время регистрации
   if(isAdmin && !isActive){
-    const allApproved = allParts.length > 0 && allParts.every(p => squadMap[p.id]?.status === 'approved');
-    const pendingCount = allParts.filter(p => !squadMap[p.id] || squadMap[p.id].status !== 'approved').length;
+    const allApproved = allParts.length > 0 && allParts.every(p => squadMap[String(p.id)]?.status === 'approved');
+    const pendingCount = allParts.filter(p => !squadMap[String(p.id)] || squadMap[String(p.id)].status !== 'approved').length;
     html += `<div style="margin-top:14px;padding:12px;background:rgba(0,0,0,.15);border-radius:14px;border:1px solid rgba(255,255,255,.06);">
       <div style="font-size:12px;color:var(--sub);margin-bottom:8px;">
         ${allApproved?'✅ Все составы одобрены — можно начинать!':`⏳ Ожидают проверки: ${pendingCount} из ${allParts.length}`}
