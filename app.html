@@ -2531,10 +2531,35 @@ async function openInviteJoin(invId,tId){
 // ================================================================
 async function openSubmitScore(matchId){
   const {data:m}=await db.from('matches').select('*').eq('id',matchId).single();if(!m)return;
-  const {data:hp}=await db.from('tournament_participants').select('team_name').eq('id',m.home_participant_id).single();
-  const {data:ap}=await db.from('tournament_participants').select('team_name').eq('id',m.away_participant_id).single();
+  const {data:hp}=await db.from('tournament_participants').select('team_name,user_id').eq('id',m.home_participant_id).single();
+  const {data:ap}=await db.from('tournament_participants').select('team_name,user_id').eq('id',m.away_participant_id).single();
   const homeName=hp?.team_name||'Хозяева';const awayName=ap?.team_name||'Гости';
   const dl=m.deadline?`<div class="deadline-badge" style="display:inline-block;margin-bottom:12px;">⏰ Дедлайн: ${new Date(m.deadline).toLocaleString('ru')}</div>`:'';
+
+  // Определяем соперника
+  const myTgId=Number(CU?.telegram_id||CU?.id);
+  const isHome=Number(hp?.user_id)===myTgId;
+  const oppPart=isHome?ap:hp;
+  const oppUsername=oppPart?.user_id?await (async()=>{
+    const {data:ou}=await db.from('users').select('username').eq('telegram_id',oppPart.user_id).single().catch(()=>({data:null}));
+    return ou?.username||null;
+  })():null;
+
+  // Состав соперника (если турнир с особым составом)
+  const {data:t}=await db.from('tournaments').select('squad_mode').eq('id',m.tournament_id).single().catch(()=>({data:null}));
+  let oppSquadBtn='';
+  if(t?.squad_mode==='special_squad' && oppPart){
+    const oppPartFull=isHome?ap:hp;
+    const partId=isHome?m.away_participant_id:m.home_participant_id;
+    const {data:sqArr}=await db.from('tournament_squads').select('photo_url').eq('participant_id',partId).limit(1).catch(()=>({data:null}));
+    const sq=sqArr&&sqArr.length?sqArr[0]:null;
+    if(sq?.photo_url){
+      oppSquadBtn=`<button onclick="openImageFull('${sq.photo_url}')" style="width:100%;margin-top:8px;padding:12px;background:rgba(255,171,64,.1);border:1px solid rgba(255,171,64,.25);border-radius:30px;color:#ffab40;font-size:14px;font-weight:700;cursor:pointer;">🌟 Посмотреть состав соперника</button>`;
+    }
+  }
+
+  const msgBtn=oppUsername?`<a href="https://t.me/${oppUsername}" target="_blank" style="display:block;width:100%;margin-top:8px;padding:12px;background:rgba(34,158,217,.1);border:1px solid rgba(34,158,217,.25);border-radius:30px;color:#54a9d4;font-size:14px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;">✈️ Написать сопернику</a>`:'';
+
   document.getElementById('submitScoreContent').innerHTML=`
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
       <span class="match-id-badge">#${m.id}</span>
@@ -2554,7 +2579,9 @@ async function openSubmitScore(matchId){
     </div>
     <div style="font-size:12px;color:var(--sub);text-align:center;margin:0 0 18px;line-height:1.5;">После отправки соперник подтвердит результат</div>
     <button class="btn" onclick="submitScore(${matchId})" style="font-size:16px;padding:15px;">📤 Отправить</button>
-    <button onclick="notifyOpponent(${matchId},event)" style="width:100%;margin-top:10px;padding:13px;background:rgba(123,232,86,.1);border:1px solid rgba(123,232,86,.25);border-radius:30px;color:#7be856;font-size:14px;font-weight:700;cursor:pointer;">📲 Уведомить соперника</button>`;
+    <button onclick="notifyOpponent(${matchId},event)" style="width:100%;margin-top:10px;padding:13px;background:rgba(123,232,86,.1);border:1px solid rgba(123,232,86,.25);border-radius:30px;color:#7be856;font-size:14px;font-weight:700;cursor:pointer;">📲 Уведомить соперника</button>
+    ${oppSquadBtn}
+    ${msgBtn}`;
   navigate('submit-score');
 }
 async function submitScore(matchId){
@@ -3121,7 +3148,10 @@ async function openTournament(tId){
   // Во время регистрации — список участников, после запуска — таблица/группы
   try{
     if(t.status==='registration'){
-      html+=await renderParticipantsList(activeParts,waitlistData||[],t,canAdmin());
+      // Для особого состава список участников уже в renderSpecialSquad
+      if(t.squad_mode!=='special_squad'){
+        html+=await renderParticipantsList(activeParts,waitlistData||[],t,canAdmin());
+      }
     } else {
       if(t.type==='league')html+=await renderLeague(t,activeParts);
       else if(t.type==='group_playoff')html+=await renderGroupPlayoff(t);
@@ -3354,59 +3384,12 @@ const SQUAD_STATUS_LABEL = {
 async function renderSpecialSquad(t, allParts, myPart){
   const isAdmin = canEditTournament(t);
   const tgId = Number(CU?.telegram_id||CU?.id);
+  const isActive = t.status === 'active';
 
   // Загружаем все составы турнира
   const {data:squads} = await db.from('tournament_squads').select('*').eq('tournament_id',t.id);
   const squadMap = {};
   (squads||[]).forEach(s => squadMap[s.participant_id] = s);
-
-  let html = '';
-
-  // ── МОЙ СОСТАВ (если зарегистрирован) ──
-  if(myPart){
-    const mySquad = squadMap[myPart.id];
-    const dl = t.squad_deadline ? new Date(t.squad_deadline) : null;
-    const expired = dl && Date.now() > dl;
-    const st = mySquad ? SQUAD_STATUS_LABEL[mySquad.status]||SQUAD_STATUS_LABEL.pending : SQUAD_STATUS_LABEL.none;
-
-    html += `<div style="background:${st.color};border:1px solid ${st.border};border-radius:18px;padding:16px;margin-bottom:14px;">
-      <div style="font-size:13px;font-weight:800;color:${st.tc};margin-bottom:10px;">Мой состав · ${st.text}</div>`;
-
-    if(mySquad?.admin_comment){
-      html += `<div style="background:rgba(0,0,0,.2);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:var(--sub);">
-        💬 Комментарий админа: <b style="color:#fff;">${mySquad.admin_comment}</b></div>`;
-    }
-
-    if(mySquad?.photo_url){
-      html += `<img src="${mySquad.photo_url}" style="width:100%;border-radius:12px;object-fit:cover;margin-bottom:10px;cursor:pointer;" onclick="openImageFull('${mySquad.photo_url}')">`;
-    }
-
-    // Кнопка подачи/пересдачи
-    if(!mySquad || mySquad.status === 'revision' || mySquad.status === 'none'){
-      if(!expired){
-        html += `<div style="margin-top:4px;">
-          ${dl?`<div style="font-size:11px;color:var(--sub);margin-bottom:8px;">⏰ Дедлайн: ${dl.toLocaleString('ru',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>`:''}
-          <div class="upload-area" id="squadUploadArea" style="margin-bottom:8px;">
-            <input type="file" accept="image/jpeg,image/png,image/webp" onchange="handleSquadUpload(this,${t.id},${myPart.id})">
-            <div class="upload-inner"><div class="upload-icon">📸</div>
-              <div><div style="font-size:13px;font-weight:700;">Загрузи фото состава</div>
-              <div style="font-size:11px;color:var(--sub);">JPG/PNG · скриншот из игры</div></div></div>
-            <div class="upload-progress" id="squadUploadProgress" style="display:none;"><div class="upload-progress-fill" id="squadUploadFill"></div></div>
-          </div>
-          <div id="squadPreviewWrap" style="display:none;margin-bottom:8px;">
-            <img id="squadPreviewImg" style="width:100%;border-radius:12px;object-fit:cover;">
-          </div>
-          <button class="btn" id="squadSubmitBtn" onclick="submitSquad(${t.id},${myPart.id})" style="display:none;">📤 Отправить состав</button>
-        </div>`;
-      } else {
-        html += `<div style="font-size:12px;color:#ff9800;margin-top:4px;">⏰ Дедлайн истёк — подача закрыта</div>`;
-      }
-    }
-    html += `</div>`;
-  }
-
-  // ── СПИСОК УЧАСТНИКОВ С СТАТУСАМИ ──
-  html += `<div style="font-size:13px;font-weight:800;margin-bottom:10px;">👥 Участники (${allParts.length})</div>`;
 
   // Загружаем данные игроков
   const tgIds = allParts.map(p=>p.user_id).filter(Boolean);
@@ -3415,6 +3398,50 @@ async function renderSpecialSquad(t, allParts, myPart){
     const {data:us} = await db.from('users').select('id,telegram_id,first_name,username,avatar_url').in('telegram_id',tgIds);
     (us||[]).forEach(u => userMap[String(u.telegram_id)] = u);
   }
+
+  let html = '';
+
+  // ── МОЙ СОСТАВ ──
+  if(myPart){
+    const mySquad = squadMap[myPart.id];
+    const dl = t.squad_deadline ? new Date(t.squad_deadline) : null;
+    const expired = dl && Date.now() > dl;
+    const st = mySquad ? SQUAD_STATUS_LABEL[mySquad.status]||SQUAD_STATUS_LABEL.pending : SQUAD_STATUS_LABEL.none;
+
+    html += `<div style="background:${st.color};border:1px solid ${st.border};border-radius:18px;padding:16px;margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:800;color:${st.tc};margin-bottom:10px;">🌟 Мой состав · ${st.text}</div>`;
+
+    if(mySquad?.admin_comment){
+      html += `<div style="background:rgba(0,0,0,.2);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:var(--sub);">
+        💬 Комментарий: <b style="color:#fff;">${mySquad.admin_comment}</b></div>`;
+    }
+    if(mySquad?.photo_url){
+      html += `<img src="${mySquad.photo_url}" style="width:100%;border-radius:12px;object-fit:cover;margin-bottom:10px;cursor:pointer;max-height:250px;" onclick="openImageFull('${mySquad.photo_url}')">`;
+    }
+    // Форма загрузки — только если не одобрен и не отказано
+    if(!isActive && (!mySquad || mySquad.status==='revision') && !expired){
+      html += `<div style="margin-top:4px;">
+        ${dl?`<div style="font-size:11px;color:var(--sub);margin-bottom:8px;">⏰ Дедлайн: ${dl.toLocaleString('ru',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>`:''}
+        <div class="upload-area" id="squadUploadArea" style="margin-bottom:8px;">
+          <input type="file" accept="image/jpeg,image/png,image/webp" onchange="handleSquadUpload(this,${t.id},${myPart.id})">
+          <div class="upload-inner"><div class="upload-icon">📸</div>
+            <div><div style="font-size:13px;font-weight:700;">Загрузи фото состава</div>
+            <div style="font-size:11px;color:var(--sub);">JPG/PNG · скриншот из игры</div></div></div>
+          <div class="upload-progress" id="squadUploadProgress" style="display:none;"><div class="upload-progress-fill" id="squadUploadFill"></div></div>
+        </div>
+        <div id="squadPreviewWrap" style="display:none;margin-bottom:8px;">
+          <img id="squadPreviewImg" style="width:100%;border-radius:12px;object-fit:cover;max-height:220px;">
+        </div>
+        <button class="btn" id="squadSubmitBtn" onclick="submitSquad(${t.id},${myPart.id})" style="display:none;">📤 Отправить состав</button>
+      </div>`;
+    } else if(!isActive && expired && !mySquad){
+      html += `<div style="font-size:12px;color:#ff9800;">⏰ Дедлайн истёк — подача закрыта</div>`;
+    }
+    html += `</div>`;
+  }
+
+  // ── СПИСОК УЧАСТНИКОВ (один, со статусами) ──
+  html += `<div style="font-size:13px;font-weight:800;margin-bottom:10px;">👥 Участники (${allParts.length})</div>`;
 
   for(const p of allParts){
     const u = userMap[String(p.user_id)];
@@ -3427,22 +3454,21 @@ async function renderSpecialSquad(t, allParts, myPart){
         ${u?.avatar_url?`<img src="${u.avatar_url}" style="width:100%;height:100%;object-fit:cover;">`:(u?.first_name||p.team_name||'?').charAt(0)}
       </div>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.team_name||u?.first_name||'Игрок'}</div>
+        <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.team_name||u?.first_name||'Игрок'}${isMe?' <span style="font-size:10px;color:var(--gold);">· Ты</span>':''}</div>
         <span style="display:inline-block;background:${st.color};border:1px solid ${st.border};border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;color:${st.tc};">${st.text}</span>
       </div>
-      ${sq?.photo_url?`<button onclick="openImageFull('${sq.photo_url}')" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:4px 8px;color:var(--sub);font-size:11px;cursor:pointer;">👁️</button>`:''}
-      ${isAdmin&&sq?`<button onclick="openSquadReview(${sq.id},${t.id})" style="background:rgba(123,232,86,.1);border:1px solid rgba(123,232,86,.2);border-radius:8px;padding:4px 8px;color:#7be856;font-size:11px;cursor:pointer;">⚙️</button>`:''}
+      ${sq?.photo_url&&(isAdmin||isMe)?`<button onclick="openImageFull('${sq.photo_url}')" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:6px 8px;color:var(--sub);font-size:13px;cursor:pointer;" title="Посмотреть состав">👁️</button>`:''}
+      ${isAdmin&&sq?`<button onclick="openSquadReview(${sq.id},${t.id})" style="background:rgba(123,232,86,.1);border:1px solid rgba(123,232,86,.2);border-radius:8px;padding:6px 8px;color:#7be856;font-size:13px;cursor:pointer;" title="Рассмотреть">⚙️</button>`:''}
     </div>`;
   }
 
-  // Кнопка старта (только если все одобрены)
-  if(isAdmin){
-    const allApproved = allParts.every(p => squadMap[p.id]?.status === 'approved');
-    const pendingCount = allParts.filter(p => !squadMap[p.id] || squadMap[p.id].status === 'pending').length;
+  // Кнопка старта — только во время регистрации
+  if(isAdmin && !isActive){
+    const allApproved = allParts.length > 0 && allParts.every(p => squadMap[p.id]?.status === 'approved');
+    const pendingCount = allParts.filter(p => !squadMap[p.id] || squadMap[p.id].status !== 'approved').length;
     html += `<div style="margin-top:14px;padding:12px;background:rgba(0,0,0,.15);border-radius:14px;border:1px solid rgba(255,255,255,.06);">
       <div style="font-size:12px;color:var(--sub);margin-bottom:8px;">
-        ${allApproved?'✅ Все составы одобрены — можно начинать!':
-          `⏳ Ожидают проверки: ${pendingCount} из ${allParts.length}`}
+        ${allApproved?'✅ Все составы одобрены — можно начинать!':`⏳ Ожидают проверки: ${pendingCount} из ${allParts.length}`}
       </div>
       <button onclick="atStartTournament(${t.id})" class="btn" ${allApproved?'':'style="opacity:.4;pointer-events:none;"'}>
         🚀 Начать турнир
@@ -3464,37 +3490,40 @@ async function handleSquadUpload(input, tId, partId){
   const prevImg = document.getElementById('squadPreviewImg');
   const btn = document.getElementById('squadSubmitBtn');
   if(prog) prog.style.display='block';
+  if(fill) fill.style.width='30%';
 
   try{
-    const ext = file.name.split('.').pop();
-    const path = `squads/${tId}/${partId}_${Date.now()}.${ext}`;
-    // Загружаем через Supabase Storage
-    const formData = new FormData();
-    formData.append('', file);
-    const uploadRes = await fetch(`${SB_URL}/storage/v1/object/squads/${path}`, {
+    const ext = file.name.split('.').pop()||'jpg';
+    const path = `squad_${tId}_${partId}_${Date.now()}.${ext}`;
+    // Используем bucket avatars (он уже существует)
+    const uploadRes = await fetch(`${SB_URL}/storage/v1/object/avatars/${path}`, {
       method:'POST',
-      headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},
-      body:file
+      headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY,'x-upsert':'true','Content-Type':file.type||'image/jpeg'},
+      body: file
     });
-    if(!uploadRes.ok) throw new Error('upload failed');
-    _squadPhotoUrl = `${SB_URL}/storage/v1/object/public/squads/${path}`;
+    if(!uploadRes.ok){
+      const errText = await uploadRes.text();
+      throw new Error('upload failed: '+errText);
+    }
+    if(fill) fill.style.width='100%';
+    _squadPhotoUrl = `${SB_URL}/storage/v1/object/public/avatars/${path}`;
     if(prevImg) prevImg.src = _squadPhotoUrl;
     if(prev) prev.style.display='block';
     if(btn) btn.style.display='block';
-    if(fill) fill.style.width='100%';
+    toast('✅ Фото загружено — нажми «Отправить состав»');
   }catch(e){
-    // Fallback — конвертируем в base64 dataURL для предпросмотра
+    // Fallback: base64 dataURL (работает без Storage)
     const reader = new FileReader();
     reader.onload = ev => {
       _squadPhotoUrl = ev.target.result;
       if(prevImg) prevImg.src = _squadPhotoUrl;
       if(prev) prev.style.display='block';
       if(btn) btn.style.display='block';
+      if(fill) fill.style.width='100%';
     };
     reader.readAsDataURL(file);
-    toast('⚠️ Загрузи через ссылку или настрой Supabase Storage bucket "squads"');
   }
-  if(prog) prog.style.display='none';
+  if(prog) setTimeout(()=>{ if(prog) prog.style.display='none'; }, 500);
 }
 
 async function submitSquad(tId, partId){
