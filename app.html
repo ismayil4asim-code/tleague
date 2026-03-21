@@ -2452,11 +2452,12 @@ async function openMatchAction(matchId){
   const {data:m}=await db.from('matches').select('*').eq('id',matchId).single();if(!m)return;
   const tgId=CU.telegram_id||CU.id;
   const {data:parts}=await db.from('tournament_participants').select('id').eq('user_id',tgId);
-  const ids=(parts||[]).map(p=>p.id);
-  const amP=ids.includes(m.home_participant_id)||ids.includes(m.away_participant_id);
+  const ids=(parts||[]).map(p=>String(p.id));
+  const amP=ids.includes(String(m.home_participant_id))||ids.includes(String(m.away_participant_id));
   if(m.status==='confirmed'||m.status==='disputed')openMatchDetail(matchId);
   else if(m.status==='pending'&&amP)openSubmitScore(matchId);
-  else if(m.status==='awaiting_confirmation'){if(m.submitted_by===CU?.id){toast('⏳ Ждёшь подтверждения соперника');return;}openConfirmMatch(matchId);}
+  else if(m.status==='pending'&&!amP)openMatchDetail(matchId);
+  else if(m.status==='awaiting_confirmation'){if(String(m.submitted_by)===String(CU?.id)){toast('⏳ Ждёшь подтверждения соперника');return;}openConfirmMatch(matchId);}
   else openMatchDetail(matchId);
 }
 
@@ -3458,7 +3459,7 @@ async function renderSpecialSquad(t, allParts, myPart){
         <span style="display:inline-block;background:${st.color};border:1px solid ${st.border};border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;color:${st.tc};">${st.text}</span>
       </div>
       ${sq?.photo_url&&(isAdmin||isMe)?`<button onclick="openImageFull('${sq.photo_url}')" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:6px 8px;color:var(--sub);font-size:13px;cursor:pointer;" title="Посмотреть состав">👁️</button>`:''}
-      ${isAdmin&&sq?`<button onclick="openSquadReview(${sq.id},${t.id})" style="background:rgba(123,232,86,.1);border:1px solid rgba(123,232,86,.2);border-radius:8px;padding:6px 8px;color:#7be856;font-size:13px;cursor:pointer;" title="Рассмотреть">⚙️</button>`:''}
+      ${isAdmin&&sq&&!isActive?`<button onclick="openSquadReview(${sq.id},${t.id})" style="background:rgba(123,232,86,.1);border:1px solid rgba(123,232,86,.2);border-radius:8px;padding:6px 8px;color:#7be856;font-size:13px;cursor:pointer;" title="Рассмотреть">⚙️</button>`:''}
     </div>`;
   }
 
@@ -3572,44 +3573,58 @@ async function openSquadReview(squadId, tId){
 }
 
 async function reviewSquad(squadId, tId, status){
-  const comment = document.getElementById('sqComment')?.value.trim()||null;
+  const commentEl = document.getElementById('sqComment');
+  const comment = commentEl?.value?.trim()||null;
+
+  // Для пересдачи/отказа просим комментарий но не блокируем
   if((status==='revision'||status==='rejected')&&!comment){
-    toast('❌ Укажи причину'); return;
-  }
-  await db.from('tournament_squads').update({
-    status, admin_comment:comment, reviewed_at:new Date().toISOString()
-  }).eq('id',squadId);
-
-  // Отказ — убираем из турнира
-  if(status==='rejected'){
-    const {data:sq}=await db.from('tournament_squads').select('participant_id,user_id').eq('id',squadId).single();
-    if(sq){
-      await db.from('tournament_participants').delete().eq('id',sq.participant_id);
-      await db.from('standings').delete().eq('tournament_id',tId).eq('participant_id',sq.participant_id);
-      // Уведомление игроку
-      const {data:u}=await db.from('users').select('id').eq('telegram_id',sq.user_id).single();
-      if(u) await db.from('notifications').insert({
-        user_id:u.id,type:'general',
-        title:'❌ Состав отклонён',
-        body:`Твой состав отклонён${comment?': '+comment:''}. Ты был удалён из турнира.`
-      });
-    }
-  } else {
-    // Уведомление о статусе
-    const {data:sq}=await db.from('tournament_squads').select('user_id').eq('id',squadId).single();
-    if(sq){
-      const {data:u}=await db.from('users').select('id').eq('telegram_id',sq.user_id).single();
-      if(u) await db.from('notifications').insert({
-        user_id:u.id,type:'general',
-        title: status==='approved'?'✅ Состав одобрен!':'🔄 Требуется пересдача',
-        body: status==='approved'?'Твой состав принят администратором.':`Причина: ${comment}`
-      });
-    }
+    if(!confirm('Оставить без комментария?')) return;
   }
 
-  document.getElementById('squadReviewModal')?.remove();
-  toast(status==='approved'?'✅ Одобрено':status==='revision'?'🔄 Отправлено на пересдачу':'❌ Отказано');
-  openTournament(tId);
+  const btn = event?.target;
+  if(btn){ btn.disabled=true; btn.textContent='...'; }
+
+  try{
+    await db.from('tournament_squads').update({
+      status, admin_comment:comment||null, reviewed_at:new Date().toISOString()
+    }).eq('id',squadId);
+
+    // Отказ — убираем из турнира
+    if(status==='rejected'){
+      const {data:sqArr}=await db.from('tournament_squads').select('participant_id,user_id').eq('id',squadId).limit(1);
+      const sq=sqArr&&sqArr[0];
+      if(sq){
+        await db.from('tournament_participants').delete().eq('id',sq.participant_id);
+        await db.from('standings').delete().eq('tournament_id',tId).eq('participant_id',sq.participant_id);
+        const {data:uArr}=await db.from('users').select('id').eq('telegram_id',sq.user_id).limit(1);
+        const u=uArr&&uArr[0];
+        if(u) await db.from('notifications').insert({
+          user_id:u.id,type:'general',
+          title:'❌ Состав отклонён',
+          body:`Твой состав отклонён${comment?': '+comment:''}. Ты удалён из турнира.`
+        });
+      }
+    } else {
+      const {data:sqArr}=await db.from('tournament_squads').select('user_id').eq('id',squadId).limit(1);
+      const sq=sqArr&&sqArr[0];
+      if(sq){
+        const {data:uArr}=await db.from('users').select('id').eq('telegram_id',sq.user_id).limit(1);
+        const u=uArr&&uArr[0];
+        if(u) await db.from('notifications').insert({
+          user_id:u.id,type:'general',
+          title: status==='approved'?'✅ Состав одобрен!':'🔄 Требуется пересдача',
+          body: status==='approved'?'Твой состав принят администратором.':`Причина: ${comment||'Не указана'}`
+        });
+      }
+    }
+
+    document.getElementById('squadReviewModal')?.remove();
+    toast(status==='approved'?'✅ Одобрено':status==='revision'?'🔄 На пересдачу':'❌ Отказано');
+    openTournament(tId);
+  }catch(e){
+    toast('❌ Ошибка: '+e.message);
+    if(btn){ btn.disabled=false; }
+  }
 }
 
 async function renderLeague(t,allParts){
