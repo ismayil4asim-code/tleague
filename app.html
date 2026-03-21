@@ -3053,10 +3053,9 @@ async function openTournament(tId){
       <div><div style="font-size:13px;font-weight:700;color:#4caf50;">Ты зарегистрирован</div><div style="font-size:12px;color:var(--sub);margin-top:1px;">${teamDisplay}</div></div>
     </div>`;
 
-    // Блок подачи состава для особого формата
+    // Блок подачи состава для особого формата — обрабатывается в renderSpecialSquad ниже
     if(t.squad_mode==='special_squad'){
-      const {data:mySquad}=await db.from('tournament_squads').select('*').eq('tournament_id',tId).eq('participant_id',myPart.id).single().catch(()=>({data:null}));
-      html+=renderSquadSubmitBlock(t,myPart,mySquad);
+      // ничего — рендер составов добавляется отдельно ниже
     }
     // Кнопки состава только для transfers (не для authentic и не free)
     if(t.squad_mode==='transfers') html+=renderSquadModeButtons(t,myPart);
@@ -3128,15 +3127,21 @@ async function openTournament(tId){
       else if(t.type==='group_playoff')html+=await renderGroupPlayoff(t);
       else html+=await renderCup(t.id);
     }
-    // Для особого состава добавляем таблицу составов поверх
-    if(t.squad_mode==='special_squad'){
-      html+=await renderSpecialSquad(t,activeParts,myPart);
-    }
   }catch(renderErr){
-    console.error('Tournament render error:',renderErr);
     html+=`<div style="background:rgba(255,80,80,.08);border:1px solid rgba(255,80,80,.2);border-radius:14px;padding:14px;text-align:center;">
-      <div style="font-size:13px;color:#ef9a9a;">&#x26A0;&#xFE0F; Ошибка: ${renderErr.message||renderErr}</div>
+      <div style="font-size:13px;color:#ef9a9a;">⚠️ Ошибка: ${renderErr.message||renderErr}</div>
     </div>`;
+  }
+
+  // Для особого состава — таблица составов (отдельный try/catch)
+  if(t.squad_mode==='special_squad'){
+    try{
+      html+=await renderSpecialSquad(t,activeParts,myPart);
+    }catch(e){
+      html+=`<div style="background:rgba(255,80,80,.08);border:1px solid rgba(255,80,80,.2);border-radius:14px;padding:14px;text-align:center;margin-top:10px;">
+        <div style="font-size:13px;color:#ef9a9a;">⚠️ Ошибка загрузки составов: ${e.message||e}</div>
+      </div>`;
+    }
   }
 
   el.innerHTML=html;
@@ -3335,112 +3340,6 @@ async function submitSquad(tId,partId){
   openTournament(tId);
 }
 
-async function renderSpecialSquad(t,activeParts,myPart){
-  const {data:squads}=await db.from('tournament_squads').select('*').eq('tournament_id',t.id);
-  const squadMap={};
-  (squads||[]).forEach(s=>squadMap[s.participant_id]=s);
-
-  // Получаем юзеров
-  const userIds=[...new Set(activeParts.map(p=>p.user_id).filter(Boolean))];
-  const userMap={};
-  if(userIds.length){
-    const {data:us}=await db.from('users').select('id,telegram_id,first_name,username,avatar_url').in('telegram_id',userIds);
-    (us||[]).forEach(u=>userMap[String(u.telegram_id)]=u);
-  }
-
-  const isAdmin=canAdmin();
-  let html=`<div style="margin-bottom:14px;">
-    <div style="font-size:13px;font-weight:800;margin-bottom:10px;color:#ffab40;">🌟 Составы участников</div>`;
-
-  for(const p of activeParts){
-    const sq=squadMap[p.id];
-    const u=userMap[String(p.user_id)];
-    const st=sq?SQUAD_STATUS_L[sq.status]:null;
-    const isMe=String(p.user_id)===String(CU?.telegram_id)||String(p.user_id)===String(CU?.id);
-
-    html+=`<div style="background:rgba(0,0,0,.2);border:1px solid ${st?st.border:'rgba(255,255,255,.06)'};border-radius:14px;padding:12px;margin-bottom:8px;">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:${sq&&isAdmin?'10px':'0'};">
-        <div style="width:38px;height:38px;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,var(--gold),#333);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;">
-          ${u?.avatar_url?`<img src="${u.avatar_url}" style="width:100%;height:100%;object-fit:cover;">`:( u?.first_name||p.team_name||'?').charAt(0)}
-        </div>
-        <div style="flex:1;">
-          <div style="font-size:13px;font-weight:700;">${p.team_name||'TBD'}${isMe?' <span style="color:var(--gold);font-size:10px;">· Ты</span>':''}</div>
-          ${u?`<div style="font-size:10px;color:var(--sub);">${u.username?'@'+u.username:u.first_name||''}</div>`:''}
-        </div>
-        <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${st?st.bg:'rgba(255,255,255,.05)'};color:${st?st.color:'var(--sub)'};border:1px solid ${st?st.border:'rgba(255,255,255,.08)'};">
-          ${st?st.label:'⏳ Ожидает'}
-        </span>
-      </div>
-      ${sq?.photo_url&&(isAdmin||isMe)?`<img src="${sq.photo_url}" style="width:100%;border-radius:10px;max-height:180px;object-fit:cover;margin-bottom:8px;cursor:pointer;" onclick="openSquadPhoto('${sq.photo_url}')">`:'' }
-      ${sq?.admin_comment?`<div style="font-size:11px;color:var(--sub);background:rgba(0,0,0,.2);border-radius:8px;padding:8px;margin-bottom:8px;">💬 ${sq.admin_comment}</div>`:''}
-      ${isAdmin&&sq&&sq.status!=='approved'?`
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
-          <button onclick="adminSquadReview(${t.id},${sq.id},'approved',null)" class="btn-green" style="flex:1;font-size:12px;">✅ Одобрить</button>
-          <button onclick="adminSquadRevisionPrompt(${t.id},${sq.id})" class="btn-blue" style="flex:1;font-size:12px;">🔄 Пересдача</button>
-          <button onclick="adminSquadRejectPrompt(${t.id},${sq.id},${p.id})" class="btn-danger" style="flex:1;font-size:12px;">❌ Отказ</button>
-        </div>`:''}
-    </div>`;
-  }
-  html+=`</div>`;
-
-  // Кнопка старта турнира — только если все одобрены
-  if(isAdmin){
-    const allApproved=activeParts.every(p=>{
-      const sq=squadMap[p.id];
-      return sq&&sq.status==='approved';
-    });
-    const pendingCount=activeParts.filter(p=>!squadMap[p.id]||squadMap[p.id].status!=='approved').length;
-    html+=`<div style="background:rgba(0,0,0,.15);border-radius:14px;padding:12px;margin-bottom:12px;text-align:center;">
-      ${allApproved
-        ?`<button class="btn" onclick="adminStartTournamentFromSquad(${t.id})" style="margin:0;">🚀 Запустить турнир</button>`
-        :`<div style="font-size:12px;color:var(--sub);">⏳ Ожидает ${pendingCount} состав(ов) для запуска</div>`}
-    </div>`;
-  }
-  return html;
-}
-
-async function adminSquadReview(tId,squadId,status,comment){
-  await db.from('tournament_squads').update({status,admin_comment:comment||null,reviewed_at:new Date().toISOString()}).eq('id',squadId);
-  toast(status==='approved'?'✅ Одобрено':'🔄 Отправлено на пересдачу');
-  openTournament(tId);
-}
-
-async function adminSquadRevisionPrompt(tId,squadId){
-  showConfirm('🔄 Пересдача','Укажи причину (нажми ОК чтобы пропустить)',async()=>{
-    const comment=prompt('Причина пересдачи (необязательно):');
-    await adminSquadReview(tId,squadId,'revision',comment);
-  });
-}
-
-async function adminSquadRejectPrompt(tId,squadId,partId){
-  showConfirm('❌ Отказ','Игрок будет удалён из турнира. Продолжить?',async()=>{
-    const comment=prompt('Причина отказа (необязательно):');
-    await db.from('tournament_squads').update({status:'rejected',admin_comment:comment||null,reviewed_at:new Date().toISOString()}).eq('id',squadId);
-    // Удаляем участника из турнира
-    await db.from('tournament_participants').delete().eq('id',partId);
-    toast('❌ Участник отстранён от турнира');
-    openTournament(tId);
-  });
-}
-
-async function adminStartTournamentFromSquad(tId){
-  showConfirm('🚀 Запустить турнир','Все составы одобрены. Начать турнир?',async()=>{
-    await db.from('tournaments').update({status:'active',registration_open:false}).eq('id',tId);
-    toast('🚀 Турнир запущен!');
-    openTournament(tId);
-  });
-}
-
-function openSquadPhoto(url){
-  // Открываем фото на весь экран
-  const ov=document.createElement('div');
-  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
-  ov.innerHTML=`<img src="${url}" style="max-width:100%;max-height:90vh;border-radius:12px;object-fit:contain;">`;
-  ov.onclick=()=>ov.remove();
-  document.body.appendChild(ov);
-}
-
-
 // ================================================================
 // ОСОБЕННЫЙ СОСТАВ
 // ================================================================
@@ -3449,7 +3348,7 @@ const SQUAD_STATUS_LABEL = {
   approved: {text:'✅ Одобрен',          color:'rgba(76,175,80,.12)',  border:'rgba(76,175,80,.35)',  tc:'#81c784'},
   revision: {text:'🔄 Пересдача',        color:'rgba(74,144,226,.12)', border:'rgba(74,144,226,.3)', tc:'#7ab3f0'},
   rejected: {text:'❌ Отказ',            color:'rgba(244,67,54,.1)',   border:'rgba(244,67,54,.3)',  tc:'#ef9a9a'},
-  none:     {text:'📤 Не подан',         color:'rgba(255,255,255,.04)',border:'rgba(255,255,255,.1)','tc':'var(--sub)'},
+  none:     {text:'📤 Не подан',         color:'rgba(255,255,255,.04)',border:'rgba(255,255,255,.1)',tc:'var(--sub)'},
 };
 
 async function renderSpecialSquad(t, allParts, myPart){
