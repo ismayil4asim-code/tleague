@@ -2450,9 +2450,13 @@ function renderMatchCard(m,myIds=[],pNameMap={},tNameMap={}){
 
 async function openMatchAction(matchId){
   const {data:m}=await db.from('matches').select('*').eq('id',matchId).single();if(!m)return;
-  const tgId=CU.telegram_id||CU.id;
+  const tgId=Number(CU.telegram_id||CU.id);
+  // Ищем участников по telegram_id
   const {data:parts}=await db.from('tournament_participants').select('id').eq('user_id',tgId);
-  const ids=(parts||[]).map(p=>String(p.id));
+  // Также ищем по internal id на случай если user_id хранится иначе
+  const {data:parts2}=await db.from('tournament_participants').select('id').eq('user_id',CU.id||tgId);
+  const allParts=[...(parts||[]),...(parts2||[])];
+  const ids=[...new Set(allParts.map(p=>String(p.id)))];
   const amP=ids.includes(String(m.home_participant_id))||ids.includes(String(m.away_participant_id));
   if(m.status==='confirmed'||m.status==='disputed')openMatchDetail(matchId);
   else if(m.status==='pending'&&amP)openSubmitScore(matchId);
