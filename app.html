@@ -3078,15 +3078,17 @@ async function openTournament(tId){
     </div>`;
   } else if(t.status==='registration'&&t.registration_open&&!isFull){
     // Открытая регистрация
-    const squadOpen=t.squad_mode&&t.squad_mode!=='free';
+    const squadOpen=t.squad_mode&&t.squad_mode!=='free'&&t.squad_mode!=='special_squad';
     if(squadOpen){
       html+=renderAuthenticRegistration(t,true,false);
     } else {
+      // Для special_squad и free — обычная регистрация по username
       html+=`<div style="background:rgba(255,215,0,.06);border:1px solid rgba(255,215,0,.2);border-radius:14px;padding:12px;margin-bottom:10px;display:flex;align-items:center;gap:10px;">
         <div style="font-size:26px;">⚽</div>
         <div><div style="font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">Твоё название в турнире</div>
         <div style="font-size:16px;font-weight:900;color:var(--gold);">@${CU.username}</div></div>
       </div>
+      ${t.squad_mode==='special_squad'&&t.squad_deadline?`<div style="font-size:11px;color:#ffab40;margin-bottom:8px;text-align:center;">⏰ После регистрации нужно загрузить состав до ${new Date(t.squad_deadline).toLocaleString('ru',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>`:''}
       <button class="btn" onclick="registerForTournament(${t.id})" style="width:100%;margin-bottom:10px;">✅ Зарегистрироваться</button>`;
     }
   } else if(t.status==='registration'&&t.registration_open&&isFull){
@@ -4836,10 +4838,15 @@ async function openAdminTournament(tId){
   btns.push(`<button class="btn-danger" onclick="atDeleteT(${t.id})" style="background:rgba(180,0,0,.15);">🗑️ Удалить</button>`);
   let sbHtml=`<div class="btn-row" style="flex-wrap:wrap;gap:6px;">${btns.join('')}</div>`;
   // Squad mode кнопки
-  if(t.squad_mode&&t.squad_mode!=='free'){
+  if(t.squad_mode&&t.squad_mode!=='free'&&t.squad_mode!=='special_squad'){
     sbHtml+=`<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
       <button class="btn-blue" onclick="openAssignTeams(${t.id})" style="font-size:12px;flex:1;background:rgba(74,144,226,.25);">🎯 Назначить команды</button>
       <button class="btn-secondary" onclick="openAdminSquadSelect(${t.id})" style="font-size:12px;flex:1;">👥 Составы</button>
+    </div>`;
+  }
+  if(t.squad_mode==='special_squad'){
+    sbHtml+=`<div style="margin-top:8px;">
+      <button class="btn-secondary" onclick="openTournament(${t.id})" style="font-size:12px;width:100%;">🌟 Просмотр составов</button>
     </div>`;
   }
   sb.innerHTML=sbHtml;
@@ -6024,7 +6031,7 @@ async function openAssignTeams(tId){
     (us||[]).forEach(u=>userMap[String(u.telegram_id)]=u);
   }
 
-  const isAuth=t.squad_mode&&t.squad_mode!=='free';
+  const isAuth=t.squad_mode&&t.squad_mode!=='free'&&t.squad_mode!=='special_squad';
   const teams=isAuth?getTeamList(t.team_type||'clubs'):null;
   const assignedTeams=isAuth?(parts||[]).map(p=>p.team_name).filter(Boolean):[];
   const availTeams=isAuth?teams.filter(tm=>!assignedTeams.includes(tm)):[];
