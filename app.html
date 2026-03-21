@@ -3416,8 +3416,10 @@ async function renderSpecialSquad(t, allParts, myPart){
   const tgId = Number(CU?.telegram_id||CU?.id);
   const isActive = t.status === 'active';
 
-  // Загружаем все составы турнира — используем String ключи
-  const {data:squads} = await db.from('tournament_squads').select('*').eq('tournament_id',t.id);
+  // Загружаем только нужные поля — НЕ загружаем photo_url сразу (они base64 и тяжёлые)
+  const {data:squads} = await db.from('tournament_squads')
+    .select('id,tournament_id,participant_id,user_id,status,admin_comment,submitted_at')
+    .eq('tournament_id',t.id);
   const squadMap = {};
   (squads||[]).forEach(s => squadMap[String(s.participant_id)] = s);
 
@@ -3428,6 +3430,9 @@ async function renderSpecialSquad(t, allParts, myPart){
     const {data:us} = await db.from('users').select('id,telegram_id,first_name,username,avatar_url').in('telegram_id',tgIds);
     (us||[]).forEach(u => userMap[String(u.telegram_id)] = u);
   }
+
+  // Сохраняем photo_url глобально чтобы загружать по запросу
+  window._squadPhotoCache = window._squadPhotoCache || {};
 
   let html = '';
 
@@ -3445,10 +3450,12 @@ async function renderSpecialSquad(t, allParts, myPart){
       html += `<div style="background:rgba(0,0,0,.2);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:var(--sub);">
         💬 Комментарий: <b style="color:#fff;">${mySquad.admin_comment}</b></div>`;
     }
-    if(mySquad?.photo_url){
-      html += `<img src="${mySquad.photo_url}" style="width:100%;border-radius:12px;object-fit:cover;margin-bottom:10px;cursor:pointer;max-height:250px;" onclick="openImageFull('${mySquad.photo_url}')">`;
+    if(mySquad){
+      // Показываем кнопку просмотра вместо вставки base64 в HTML
+      html += `<button onclick="viewSquadPhoto(${mySquad.id},'my-squad-photo-${mySquad.id}')" style="width:100%;padding:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:12px;color:var(--sub);font-size:13px;cursor:pointer;margin-bottom:8px;">👁️ Посмотреть мой состав</button>
+      <div id="my-squad-photo-${mySquad.id}"></div>`;
     }
-    // Форма загрузки — только если не одобрен и не отказано
+    // Форма загрузки
     if(!mySquad || mySquad.status==='revision'){
       if(!expired){
         html += `<div style="margin-top:4px;">
@@ -3456,7 +3463,7 @@ async function renderSpecialSquad(t, allParts, myPart){
           <div class="upload-area" id="squadUploadArea" style="margin-bottom:8px;">
             <input type="file" accept="image/jpeg,image/png,image/webp" onchange="handleSquadUpload(this,${t.id},${myPart.id})">
             <div class="upload-inner"><div class="upload-icon">📸</div>
-              <div><div style="font-size:13px;font-weight:700;">Загрузи фото состава</div>
+              <div><div style="font-size:13px;font-weight:700;">${mySquad?.status==='revision'?'Загрузи новое фото':'Загрузи фото состава'}</div>
               <div style="font-size:11px;color:var(--sub);">JPG/PNG · скриншот из игры</div></div></div>
             <div class="upload-progress" id="squadUploadProgress" style="display:none;"><div class="upload-progress-fill" id="squadUploadFill"></div></div>
           </div>
@@ -3472,7 +3479,7 @@ async function renderSpecialSquad(t, allParts, myPart){
     html += `</div>`;
   }
 
-  // ── СПИСОК УЧАСТНИКОВ (один, со статусами) ──
+  // ── СПИСОК УЧАСТНИКОВ ──
   html += `<div style="font-size:13px;font-weight:800;margin-bottom:10px;">👥 Участники (${allParts.length})</div>`;
 
   for(const p of allParts){
@@ -3489,12 +3496,12 @@ async function renderSpecialSquad(t, allParts, myPart){
         <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.team_name||u?.first_name||'Игрок'}${isMe?' <span style="font-size:10px;color:var(--gold);">· Ты</span>':''}</div>
         <span style="display:inline-block;background:${st.color};border:1px solid ${st.border};border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;color:${st.tc};">${st.text}</span>
       </div>
-      ${sq?.photo_url&&(isAdmin||isMe)?`<button onclick="openImageFull('${sq.photo_url}')" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:6px 8px;color:var(--sub);font-size:13px;cursor:pointer;" title="Посмотреть состав">👁️</button>`:''}
+      ${sq?`<button onclick="viewSquadPhoto(${sq.id},'sq-photo-${sq.id}')" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:6px 8px;color:var(--sub);font-size:13px;cursor:pointer;" title="Посмотреть состав">👁️</button>`:''}
       ${isAdmin&&sq&&!isActive?`<button onclick="openSquadReview(${sq.id},${t.id})" style="background:rgba(123,232,86,.1);border:1px solid rgba(123,232,86,.2);border-radius:8px;padding:6px 8px;color:#7be856;font-size:13px;cursor:pointer;" title="Рассмотреть">⚙️</button>`:''}
     </div>`;
   }
 
-  // Кнопка старта — только во время регистрации
+  // Кнопка старта
   if(isAdmin && !isActive){
     const allApproved = allParts.length > 0 && allParts.every(p => squadMap[String(p.id)]?.status === 'approved');
     const pendingCount = allParts.filter(p => !squadMap[String(p.id)] || squadMap[String(p.id)].status !== 'approved').length;
@@ -3509,6 +3516,42 @@ async function renderSpecialSquad(t, allParts, myPart){
   }
 
   return html;
+}
+
+// Загружаем фото состава только когда нажали кнопку
+async function viewSquadPhoto(squadId, containerId){
+  const container = document.getElementById(containerId);
+  if(!container) return;
+
+  // Уже загружено
+  if(container.innerHTML.trim()) {
+    container.style.display = container.style.display==='none' ? 'block' : 'none';
+    return;
+  }
+
+  container.innerHTML = '<div style="text-align:center;padding:10px;color:var(--sub);font-size:12px;">Загружаем...</div>';
+
+  const {data:sqArr} = await db.from('tournament_squads').select('photo_url').eq('id',squadId).limit(1);
+  const photoUrl = sqArr&&sqArr[0]?.photo_url;
+
+  if(photoUrl){
+    container.innerHTML = `<img src="${photoUrl}" style="width:100%;border-radius:12px;object-fit:contain;max-height:300px;cursor:pointer;margin-top:8px;" onclick="openImageFull('${squadId}_photo')">`;
+    // Для base64 нужно иначе
+    const img = container.querySelector('img');
+    if(img) img.src = photoUrl;
+    img.onclick = () => {
+      const ov = document.createElement('div');
+      ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.97);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+      const im = document.createElement('img');
+      im.src = photoUrl;
+      im.style.cssText='max-width:100%;max-height:90vh;border-radius:12px;object-fit:contain;';
+      ov.appendChild(im);
+      ov.onclick = ()=>ov.remove();
+      document.body.appendChild(ov);
+    };
+  } else {
+    container.innerHTML = '<div style="text-align:center;padding:8px;color:var(--sub);font-size:12px;">Фото не найдено</div>';
+  }
 }
 
 // Загрузка фото состава
@@ -3576,22 +3619,21 @@ async function submitSquad(tId, partId){
   openTournament(tId);
 }
 
-// Модал проверки состава (для админа)
 async function openSquadReview(squadId, tId){
-  const {data:sq} = await db.from('tournament_squads').select('*').eq('id',squadId).single();
-  if(!sq) return;
-
+  // Сначала показываем модал без фото
   const ov = document.createElement('div');
   ov.id = 'squadReviewModal';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.95);backdrop-filter:blur(10px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto;';
   ov.innerHTML=`
     <div style="background:var(--card);border-radius:24px;padding:20px;max-width:420px;width:100%;border:2px solid rgba(123,232,86,.2);max-height:90vh;overflow-y:auto;">
       <div style="font-size:16px;font-weight:800;color:var(--gold);margin-bottom:14px;">⚙️ Проверка состава</div>
-      <img src="${sq.photo_url}" style="width:100%;border-radius:14px;object-fit:cover;margin-bottom:14px;cursor:pointer;" onclick="openImageFull('${sq.photo_url}')">
-      <div style="font-size:12px;color:var(--sub);margin-bottom:12px;">Подан: ${new Date(sq.submitted_at).toLocaleString('ru')}</div>
+      <div id="sqPhotoWrap" style="margin-bottom:14px;">
+        <div style="text-align:center;padding:20px;color:var(--sub);font-size:12px;">⏳ Загружаем фото...</div>
+      </div>
+      <div style="font-size:12px;color:var(--sub);margin-bottom:12px;" id="sqSubmitTime"></div>
       <div class="form-group">
         <label class="form-label">Комментарий (для пересдачи/отказа)</label>
-        <input class="form-input" id="sqComment" placeholder="Укажи что исправить..." value="${sq.admin_comment||''}">
+        <input class="form-input" id="sqComment" placeholder="Укажи что исправить...">
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
         <button class="btn" onclick="reviewSquad(${squadId},${tId},'approved')" style="background:linear-gradient(135deg,#2e7d32,#1b5e20);">✅ Одобрить</button>
@@ -3601,6 +3643,35 @@ async function openSquadReview(squadId, tId){
       </div>
     </div>`;
   document.body.appendChild(ov);
+
+  // Загружаем данные асинхронно
+  const {data:sq} = await db.from('tournament_squads').select('*').eq('id',squadId).limit(1);
+  const squad = sq&&sq[0];
+  if(!squad){ ov.remove(); return; }
+
+  const photoWrap = document.getElementById('sqPhotoWrap');
+  const timeEl = document.getElementById('sqSubmitTime');
+  const commentEl = document.getElementById('sqComment');
+
+  if(squad.photo_url && photoWrap){
+    const img = document.createElement('img');
+    img.src = squad.photo_url;
+    img.style.cssText='width:100%;border-radius:14px;object-fit:contain;max-height:300px;cursor:pointer;';
+    img.onclick = () => {
+      const fullOv = document.createElement('div');
+      fullOv.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.97);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px;';
+      const fi = document.createElement('img');
+      fi.src = squad.photo_url;
+      fi.style.cssText='max-width:100%;max-height:90vh;border-radius:12px;object-fit:contain;';
+      fullOv.appendChild(fi);
+      fullOv.onclick=()=>fullOv.remove();
+      document.body.appendChild(fullOv);
+    };
+    photoWrap.innerHTML='';
+    photoWrap.appendChild(img);
+  }
+  if(timeEl) timeEl.textContent = 'Подан: '+new Date(squad.submitted_at).toLocaleString('ru');
+  if(commentEl) commentEl.value = squad.admin_comment||'';
 }
 
 async function reviewSquad(squadId, tId, status){
