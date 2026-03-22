@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T-League — Скачать приложение</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --green:#7be856;
+  --green2:#4caf50;
+  --dark:#080f09;
+  --dark2:#0b1a0d;
+  --card:rgba(12,24,14,.95);
+  --sub:#8abf90;
+}
+html,body{background:var(--dark);color:#fff;font-family:'Nunito',sans-serif;min-height:100vh;overflow-x:hidden;}
+
+/* BG */
+.bg{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:linear-gradient(160deg,#080f09 0%,#0b1a0d 40%,#091408 100%);
+}
+.bg-glow{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse 70% 50% at 20% 10%,rgba(123,232,86,.07) 0%,transparent 60%),
+    radial-gradient(ellipse 50% 40% at 80% 80%,rgba(76,175,80,.05) 0%,transparent 60%);
+}
+.bg-grid{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(123,232,86,.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(123,232,86,.03) 1px,transparent 1px);
+  background-size:50px 50px;
+  mask-image:radial-gradient(ellipse 90% 90% at 50% 50%,black,transparent);
+}
+
+/* HEADER */
+header{position:relative;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:18px 40px;border-bottom:1px solid rgba(123,232,86,.08);}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+.logo img{width:36px;height:36px;border-radius:50%;border:2px solid var(--green);box-shadow:0 0 12px rgba(123,232,86,.4);}
+.logo-name{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;
+  background:linear-gradient(135deg,#fff,var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.header-back{color:var(--sub);font-size:13px;font-weight:600;text-decoration:none;
+  display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:30px;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);transition:.2s;}
+.header-back:hover{background:rgba(255,255,255,.08);}
+
+/* HERO */
+.hero{position:relative;z-index:10;text-align:center;padding:70px 24px 40px;}
+.hero-eyebrow{display:inline-flex;align-items:center;gap:8px;
+  background:rgba(123,232,86,.08);border:1px solid rgba(123,232,86,.2);
+  border-radius:50px;padding:6px 18px;font-size:12px;font-weight:700;
+  color:var(--green);letter-spacing:1px;text-transform:uppercase;margin-bottom:24px;
+  animation:fadeUp .6s ease both;}
+.hero h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(52px,10vw,96px);
+  line-height:.95;letter-spacing:3px;margin-bottom:16px;
+  animation:fadeUp .6s ease .1s both;}
+.hero h1 span{background:linear-gradient(135deg,#fff 0%,#c8f7a0 40%,var(--green) 70%,#fff 100%);
+  background-size:200%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  animation:shimmer 4s linear infinite;}
+.hero-sub{font-size:16px;color:var(--sub);font-weight:400;margin-bottom:48px;
+  max-width:480px;margin-left:auto;margin-right:auto;line-height:1.7;
+  animation:fadeUp .6s ease .2s both;}
+
+/* DOWNLOAD BTN */
+.download-btn{
+  display:inline-flex;align-items:center;gap:14px;
+  background:linear-gradient(135deg,var(--green),var(--green2));
+  color:#0a150b;font-weight:900;font-size:18px;
+  padding:18px 44px;border-radius:60px;border:none;cursor:pointer;
+  box-shadow:0 8px 40px rgba(123,232,86,.5),0 2px 8px rgba(0,0,0,.4);
+  text-decoration:none;transition:.25s;
+  animation:fadeUp .6s ease .3s both;
+  position:relative;overflow:hidden;
+}
+.download-btn::before{content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,.2),transparent);border-radius:60px;}
+.download-btn:hover{transform:translateY(-3px) scale(1.02);box-shadow:0 12px 50px rgba(123,232,86,.65);}
+.download-btn svg{width:24px;height:24px;flex-shrink:0;}
+.download-hint{margin-top:14px;font-size:12px;color:rgba(255,255,255,.25);
+  animation:fadeUp .6s ease .4s both;}
+
+/* PHONE MOCKUP + SCREENSHOTS */
+.screens-section{position:relative;z-index:10;padding:20px 24px 80px;}
+.screens-label{text-align:center;font-size:12px;font-weight:700;color:var(--sub);
+  text-transform:uppercase;letter-spacing:2px;margin-bottom:32px;}
+
+.screens-track-wrap{overflow:hidden;position:relative;}
+.screens-track{
+  display:flex;gap:16px;
+  animation:scrollTrack 30s linear infinite;
+  width:max-content;
+}
+.screens-track:hover{animation-play-state:paused;}
+.screen-card{
+  flex-shrink:0;width:200px;
+  border-radius:24px;overflow:hidden;
+  border:1px solid rgba(123,232,86,.15);
+  box-shadow:0 20px 40px rgba(0,0,0,.5);
+  position:relative;
+}
+.screen-card::before{content:'';position:absolute;inset:0;z-index:1;
+  background:linear-gradient(180deg,transparent 60%,rgba(8,15,9,.8) 100%);pointer-events:none;}
+.screen-card img{width:100%;height:380px;object-fit:cover;object-position:top;display:block;}
+.screen-notch{position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  width:60px;height:8px;background:rgba(0,0,0,.5);border-radius:10px;z-index:2;}
+
+@keyframes scrollTrack{
+  0%{transform:translateX(0);}
+  100%{transform:translateX(-50%);}
+}
+
+/* FADE edges */
+.screens-track-wrap::before,.screens-track-wrap::after{
+  content:'';position:absolute;top:0;bottom:0;width:120px;z-index:2;pointer-events:none;
+}
+.screens-track-wrap::before{left:0;background:linear-gradient(90deg,var(--dark),transparent);}
+.screens-track-wrap::after{right:0;background:linear-gradient(270deg,var(--dark),transparent);}
+
+/* FEATURES */
+.features{position:relative;z-index:10;max-width:900px;margin:0 auto;padding:0 24px 80px;}
+.features h2{font-family:'Bebas Neue',sans-serif;font-size:clamp(28px,5vw,48px);
+  letter-spacing:2px;text-align:center;margin-bottom:32px;color:rgba(255,255,255,.15);}
+.features h2 span{color:#fff;}
+.feat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;}
+.feat{background:var(--card);border:1px solid rgba(123,232,86,.1);border-radius:20px;
+  padding:22px;transition:.3s;position:relative;overflow:hidden;}
+.feat::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(123,232,86,.3),transparent);
+  opacity:0;transition:.3s;}
+.feat:hover{border-color:rgba(123,232,86,.25);transform:translateY(-3px);}
+.feat:hover::after{opacity:1;}
+.feat-icon{font-size:32px;margin-bottom:10px;display:block;}
+.feat-title{font-size:15px;font-weight:800;margin-bottom:6px;}
+.feat-desc{font-size:12px;color:var(--sub);line-height:1.6;}
+
+/* BOTTOM CTA */
+.bottom-cta{position:relative;z-index:10;text-align:center;padding:0 24px 100px;}
+.bottom-cta h2{font-family:'Bebas Neue',sans-serif;font-size:clamp(32px,6vw,60px);
+  letter-spacing:2px;margin-bottom:10px;}
+.bottom-cta p{font-size:14px;color:var(--sub);margin-bottom:32px;}
+
+/* FOOTER */
+footer{position:relative;z-index:10;text-align:center;padding:20px 24px;
+  border-top:1px solid rgba(123,232,86,.06);font-size:12px;color:rgba(255,255,255,.2);}
+footer a{color:var(--green);text-decoration:none;opacity:.7;}
+
+/* ANIMS */
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes shimmer{0%{background-position:200% center}100%{background-position:-200% center}}
+
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease;}
+.reveal.visible{opacity:1;transform:translateY(0);}
+
+/* MOBILE */
+@media(max-width:600px){
+  header{padding:14px 20px;}
+  .hero{padding:50px 20px 30px;}
+  .download-btn{font-size:16px;padding:16px 32px;}
+  .screen-card{width:160px;}
+  .screen-card img{height:300px;}
+}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="bg-glow"></div>
+<div class="bg-grid"></div>
+
+<header>
+  <a href="./index.html" class="logo">
+    <img src="https://i.imgur.com/KMett7q.jpeg" onerror="this.style.display='none'">
+    <span class="logo-name">T-League</span>
+  </a>
+  <a href="./index.html" class="header-back">← Главная</a>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-eyebrow">📱 Android App · Бесплатно</div>
+  <h1><span>T-League</span><br>в твоём кармане</h1>
+  <p class="hero-sub">Турниры, матчи, таблица и уведомления — всё в одном приложении. Играй где угодно.</p>
+
+  <a href="https://tleague.vercel.app/tleague.apk" class="download-btn" id="downloadBtn">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.523 15.341A7.014 7.014 0 0 0 19 11c0-3.866-3.134-7-7-7a6.986 6.986 0 0 0-5.027 2.133L5.6 4.76A8.978 8.978 0 0 1 12 2c4.97 0 9 4.03 9 9a8.985 8.985 0 0 1-2.116 5.836l-1.361-1.495zM12 20a7.966 7.966 0 0 1-5.127-1.857L5.5 19.5l-1.5-1.5 1.358-1.372A7.966 7.966 0 0 1 4 12c0-1.48.358-2.876.994-4.106L3.63 6.522A9.953 9.953 0 0 0 2 12c0 5.523 4.477 10 10 10a9.953 9.953 0 0 0 5.478-1.63l-1.372-1.363A7.966 7.966 0 0 1 12 20z"/><path d="M13 11V7h-2v4H8l4 4 4-4h-3z"/></svg>
+    Скачать для Android
+  </a>
+  <div class="download-hint">APK · Установка из файла · Android 7.0+</div>
+</section>
+
+<!-- SCREENSHOTS -->
+<div class="screens-section reveal">
+  <div class="screens-label">Скриншоты приложения</div>
+  <div class="screens-track-wrap">
+    <div class="screens-track" id="screensTrack">
+      <!-- Первый набор -->
+      <div class="screen-card"><div class="screen-notch"></div><img src="https://i.ibb.co/bgPZTkp8/photo-2026-03-22-08-16-38.jpg" alt="Скрин 1"></div>
+      <div class="screen-card"><div class="screen-notch"></div><img src="https://i.ibb.co/YTYZp7HD/photo-2026-03-22-08-16-40.jpg" alt="Скрин 2"></div>
+      <div class="screen-card"><div class="screen-notch"></div><img src="https://i.ibb.co/Y49xWqRd/photo-2026-03-22-08-16-38-2.jpg" alt="Скрин 3"></div>
+      <div class="screen-card"><div class="screen-notch"></div><img src="https://i.ibb.co/PZcGnsCf/photo-2026-03-22-08-16-38-3.jpg" alt="Скрин 4"></div>
+      <div class="screen-card"><div class="screen-notch"></div><img src="https://i.ibb.co/LdWn8VtH/photo-2026-03-22-08-16-39.jpg" alt="Скрин 5"></div>
+      <div class="screen-card"><div class="screen-notch"></div><img src="https://i.ibb.co/XfyGs9pw/photo-2026-03-22-08-16-39-2.jpg" alt="Скрин 6"></div>
+      <!-- Дублируем для бесконечной прокрутки -->
+      <div class="screen-card"><div class="screen-notch"></div><img src="https://i.ibb.co/bgPZTkp8/photo-2026-03-22-08-16-38.jpg" alt="Скрин 1"></div>
+      <div class="screen-card"><div class="screen-notch"></div><img src="https://i.ibb.co/YTYZp7HD/photo-2026-03-22-08-16-40.jpg" alt="Скрин 2"></div>
+      <div class="screen-card"><div class="screen-notch"></div><img src="https://i.ibb.co/Y49xWqRd/photo-2026-03-22-08-16-38-2.jpg" alt="Скрин 3"></div>
+      <div class="screen-card"><div class="screen-notch"></div><img src="https://i.ibb.co/PZcGnsCf/photo-2026-03-22-08-16-38-3.jpg" alt="Скрин 4"></div>
+      <div class="screen-card"><div class="screen-notch"></div><img src="https://i.ibb.co/LdWn8VtH/photo-2026-03-22-08-16-39.jpg" alt="Скрин 5"></div>
+      <div class="screen-card"><div class="screen-notch"></div><img src="https://i.ibb.co/XfyGs9pw/photo-2026-03-22-08-16-39-2.jpg" alt="Скрин 6"></div>
+    </div>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section class="features reveal">
+  <h2>Всё что нужно <span>для лиги</span></h2>
+  <div class="feat-grid">
+    <div class="feat"><span class="feat-icon">🏆</span><div class="feat-title">Турниры</div><div class="feat-desc">Лиги, кубки, групповые этапы с плей-офф</div></div>
+    <div class="feat"><span class="feat-icon">⚽</span><div class="feat-title">Матчи</div><div class="feat-desc">Вводи счёт, соперник подтверждает</div></div>
+    <div class="feat"><span class="feat-icon">📊</span><div class="feat-title">Таблица</div><div class="feat-desc">Автоматический пересчёт в реальном времени</div></div>
+    <div class="feat"><span class="feat-icon">🔔</span><div class="feat-title">Уведомления</div><div class="feat-desc">Push и Telegram уведомления о матчах</div></div>
+    <div class="feat"><span class="feat-icon">🌟</span><div class="feat-title">Составы</div><div class="feat-desc">Публикуй и отправляй состав на проверку</div></div>
+    <div class="feat"><span class="feat-icon">👤</span><div class="feat-title">Профиль</div><div class="feat-desc">XP, уровни, достижения и статистика</div></div>
+  </div>
+</section>
+
+<!-- BOTTOM CTA -->
+<div class="bottom-cta reveal">
+  <h2>Готов? Скачай прямо сейчас</h2>
+  <p>Бесплатно · Без регистрации · Вход через Telegram</p>
+  <a href="https://tleague.vercel.app/tleague.apk" class="download-btn">
+    <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M13 11V7h-2v4H8l4 4 4-4h-3z"/><path d="M19 15v4H5v-4H3v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4h-2z"/></svg>
+    Скачать APK
+  </a>
+</div>
+
+<footer>
+  <p>© 2026 T-League · <a href="./index.html">Главная</a> · <a href="./app.html">Личный кабинет</a> · <a href="https://t.me/efootballtleague">Telegram</a></p>
+</footer>
+
+<script>
+// Reveal on scroll
+const obs = new IntersectionObserver(entries=>{
+  entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('visible'); obs.unobserve(e.target); } });
+},{threshold:.1});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+</script>
+</body>
+</html>
