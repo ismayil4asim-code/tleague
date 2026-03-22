@@ -1,4 +1,4 @@
 {
-  "version": "1.0.0",
-  "download_url": "https://tleague.vercel.app/index.html"
+  "version": "1.0.1",
+  "download_url": "https://tleague.vercel.app/download.html"
 }
